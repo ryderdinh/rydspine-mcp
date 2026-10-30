@@ -186,3 +186,54 @@ function loopSeam(loaded: Loaded, name: string, duration: number): { distance: n
 	});
 	return { distance, bone };
 }
+
+export interface FootReport {
+	bone: string;
+	contactFrames: number;
+	/** Largest deviation from the planted interval's median horizontal speed, px per frame. */
+	slip: number;
+	/** Average horizontal speed while planted, px per second (negative: sliding back, as in an in-place cycle). */
+	speed: number;
+}
+
+/**
+ * Foot sliding: while a foot is on the ground its horizontal speed must stay constant (0 when standing,
+ * the ground speed in an in-place cycle). Feet are bone origins; ground is their lowest setup-pose height.
+ */
+export function footSlip(ws: Workspace, animationName: string, feet: string[], tolerance = 1): FootReport[] {
+	const loaded = load(ws);
+	const animation = loaded.data.findAnimation(animationName);
+	if (!animation) throw new UserError(`animation "${animationName}" not found`);
+	const bones = feet.map((f) => boneByName(loaded.skeleton, f));
+	const ground = Math.min(...bones.map((b) => b.appliedPose.worldY));
+	const frames = Math.max(1, Math.round(animation.duration * FPS));
+	const track = bones.map(() => [] as { x: number; y: number }[]);
+	for (let i = 0; i <= frames; i++) {
+		poseAt(loaded, animationName, (animation.duration * i) / frames);
+		bones.forEach((b, k) => track[k].push({ x: b.appliedPose.worldX, y: b.appliedPose.worldY }));
+	}
+	return bones.map((b, k) => {
+		const t = track[k];
+		// Split planted frames into contiguous intervals; within each, speed must stay at its median.
+		const intervals: number[][] = [];
+		let current: number[] | null = null;
+		for (let i = 1; i < t.length; i++) {
+			if (t[i].y - ground <= tolerance && t[i - 1].y - ground <= tolerance) {
+				current ??= [];
+				current.push(t[i].x - t[i - 1].x);
+			} else if (current) {
+				intervals.push(current);
+				current = null;
+			}
+		}
+		if (current) intervals.push(current);
+		let slip = 0;
+		for (const v of intervals) {
+			const median = [...v].sort((a, c) => a - c)[Math.floor(v.length / 2)];
+			for (const x of v) slip = Math.max(slip, Math.abs(x - median));
+		}
+		const v = intervals.flat();
+		const mean = v.length ? v.reduce((a, c) => a + c, 0) / v.length : 0;
+		return { bone: b.data.name, contactFrames: v.length, slip, speed: mean * (frames / animation.duration) };
+	});
+}

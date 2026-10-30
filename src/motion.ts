@@ -89,9 +89,119 @@ export function writeKeys(ws: Workspace, anim: string, bone: string, property: P
 
 export function animDuration(ws: Workspace, anim: string): number {
 	let max = 0;
-	for (const tls of Object.values(animation(ws, anim).bones ?? {}))
-		for (const keys of Object.values(tls)) for (const k of keys) max = Math.max(max, k.time ?? 0);
+	const a = animation(ws, anim);
+	for (const group of [a.bones ?? {}, a.slots ?? {}])
+		for (const tls of Object.values(group))
+			for (const keys of Object.values(tls)) for (const k of keys as { time?: number }[]) max = Math.max(max, k.time ?? 0);
 	return max;
+}
+
+export const SLOT_PROPERTIES = ["alpha", "rgba", "attachment"] as const;
+export type SlotProperty = (typeof SLOT_PROPERTIES)[number];
+
+export interface SlotKey {
+	time: number;
+	/** alpha: 0..1 */
+	value?: number;
+	/** rgba: RRGGBBAA */
+	color?: string;
+	/** attachment: name, or null to hide */
+	name?: string | null;
+	ease?: Ease;
+}
+
+/** Slot timelines: fade (alpha), tint (rgba, linear or stepped) and attachment swaps (blink, open mouth). */
+export function writeSlotKeys(ws: Workspace, anim: string, slot: string, property: SlotProperty, keys: SlotKey[]): void {
+	assertUnlocked(ws, "animations", [anim]);
+	assertUnlocked(ws, "slots", [slot]);
+	if (!ws.doc.slots.some((s) => s.name === slot)) throw new UserError(`slot "${slot}" not found`);
+	if (!keys.length) return;
+	const sorted = [...keys].sort((a, b) => a.time - b.time);
+	const [start, end] = [sorted[0].time, sorted[sorted.length - 1].time];
+	const fresh = sorted.map((k, i) => {
+		const next = sorted[i + 1];
+		if (property === "attachment") {
+			if (k.name === undefined) throw new UserError("attachment keys need a name (or null)");
+			return { time: r3(k.time), name: k.name };
+		}
+		if (property === "alpha") {
+			if (k.value === undefined) throw new UserError("alpha keys need a value");
+			const out: ValueKey = { time: r3(k.time), value: r3(k.value) };
+			const curve = next && k.ease ? easeCurve(k.ease, k.time, k.value, next.time, next.value ?? k.value) : undefined;
+			if (curve) out.curve = curve;
+			return out;
+		}
+		if (!k.color || !/^[0-9a-fA-F]{8}$/.test(k.color)) throw new UserError("rgba keys need color as RRGGBBAA");
+		if (k.ease && k.ease !== "linear" && k.ease !== "stepped") throw new UserError("rgba keys support linear or stepped only");
+		return k.ease === "stepped" ? { time: r3(k.time), color: k.color, curve: "stepped" } : { time: r3(k.time), color: k.color };
+	});
+	const a = animation(ws, anim);
+	a.slots ??= {};
+	a.slots[slot] ??= {};
+	const old = (a.slots[slot][property] ?? []) as { time?: number; curve?: unknown }[];
+	const kept = old.filter((k) => (k.time ?? 0) < start - EPS || (k.time ?? 0) > end + EPS);
+	const before = kept.filter((k) => (k.time ?? 0) < start - EPS).pop();
+	if (before) delete before.curve;
+	a.slots[slot][property] = [...kept, ...fresh].sort((x, y) => ((x as { time?: number }).time ?? 0) - ((y as { time?: number }).time ?? 0));
+}
+
+export interface GaitSpec {
+	animation: string;
+	/** IK target bones of the feet, with their phase in the cycle (0..1). */
+	feet: { bone: string; phase: number }[];
+	/** Bone that bobs (hips / body). */
+	body?: string;
+	/** Seconds per full cycle (both feet). */
+	period: number;
+	/** Foot travel per step in px. */
+	stride: number;
+	/** Foot lift height in px. */
+	lift: number;
+	/** Fraction of the cycle each foot is on the ground: ~0.6 walk, ~0.35 run. */
+	contact?: number;
+	/** Body bob in px (moves twice per cycle). */
+	bob?: number;
+	start?: number;
+	cycles?: number;
+}
+
+/**
+ * In-place walk/run cycle. While a foot is down it slides back at exactly the body's speed, so in a
+ * game that moves the character at stride / (contact * period) px/s the feet do not skate.
+ */
+export function gait(ws: Workspace, s: GaitSpec): string {
+	const start = s.start ?? 0;
+	const cycles = s.cycles ?? 1;
+	const contact = s.contact ?? 0.6;
+	const end = start + s.period * cycles;
+	const frames = Math.round((end - start) * 30);
+	const times = Array.from({ length: frames + 1 }, (_, i) => start + ((end - start) * i) / frames);
+	const smooth = (u: number) => u * u * (3 - 2 * u);
+	for (const foot of s.feet) {
+		const at = (t: number) => {
+			const u = ((((t - start) / s.period + foot.phase) % 1) + 1) % 1;
+			if (u < contact) return { x: s.stride / 2 - (s.stride * u) / contact, y: 0 };
+			const v = (u - contact) / (1 - contact);
+			return { x: -s.stride / 2 + s.stride * smooth(v), y: s.lift * Math.sin(Math.PI * v) };
+		};
+		writeKeys(ws, s.animation, foot.bone, "translatex", times.map((t) => ({ time: t, value: at(t).x })), [start, end]);
+		writeKeys(ws, s.animation, foot.bone, "translatey", times.map((t) => ({ time: t, value: at(t).y })), [start, end]);
+	}
+	if (s.body && s.bob) {
+		oscillate(ws, {
+			animation: s.animation,
+			bones: [s.body],
+			property: "translatey",
+			amplitude: s.bob,
+			period: s.period / 2,
+			start,
+			end,
+			phase: 0.25,
+			center: -s.bob,
+		});
+	}
+	const speed = s.stride / (contact * s.period);
+	return `ground speed ${r3(speed)} px/s (move the character at this speed so planted feet do not slide)`;
 }
 
 interface Chain {

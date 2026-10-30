@@ -150,4 +150,56 @@ describe("rig_template", () => {
 		await h.ok("anim_tween", { project: p, animation: "roll", bones: ["wheel"], property: "rotate", from: 0, to: -360, duration: 1, ease: "linear" });
 		expect((await h.ok("validate", { project: p })).text).toMatch(/roll: 1\.000s, loop seam 0\.0/);
 	});
+
+	it("walks in place without foot sliding, and catches a skating foot", async () => {
+		const p = "walker";
+		await h.ok("anim_create", { project: p, name: "walk", loop: true });
+		const r = await h.ok("anim_gait", {
+			project: p,
+			animation: "walk",
+			feet: [
+				{ bone: "left-leg-target", phase: 0 },
+				{ bone: "right-leg-target", phase: 0.5 },
+			],
+			body: "hips",
+			period: 1,
+			stride: 40,
+			lift: 12,
+			bob: 3,
+		});
+		expect(r.text).toMatch(/ground speed 66\.667 px\/s/);
+		expect((await h.ok("validate", { project: p })).text).toMatch(/walk: 1\.000s, loop seam 0\.0/);
+		const check = await h.ok("motion_check", { project: p, animation: "walk", feet: ["left-leg-target", "right-leg-target"] });
+		expect(check.text).toMatch(/^OK/);
+		expect(check.text).toMatch(/speed -66\.\d px\/s/);
+
+		// A foot that eases to a stop while still on the ground skates.
+		await h.ok("anim_create", { project: p, name: "skate", loop: false });
+		await h.ok("anim_tween", { project: p, animation: "skate", bones: ["left-leg-target"], property: "translatex", from: 0, to: 30, duration: 1, ease: "ease-in-out" });
+		const bad = await h.call("motion_check", { project: p, animation: "skate", feet: ["left-leg-target"] });
+		expect(bad.isError).toBe(true);
+		expect(bad.text).toMatch(/^SLIDING/);
+		await h.ok("preview", { project: p, animation: "walk", frames: 6 });
+	});
+
+	it("fades and swaps slot attachments", async () => {
+		const p = "cart";
+		await h.ok("anim_create", { project: p, name: "appear", loop: false });
+		await h.ok("anim_slot_keys", {
+			project: p,
+			animation: "appear",
+			slot: "wheel",
+			property: "alpha",
+			keys: [{ time: 0, value: 0, ease: "ease-out" }, { time: 0.5, value: 1 }],
+		});
+		await h.ok("anim_slot_keys", { project: p, animation: "appear", slot: "wheel", property: "attachment", keys: [{ time: 0.6, name: null }, { time: 0.8, name: "wheel" }] });
+		expect((await h.ok("validate", { project: p })).text).toMatch(/appear: 0\.800s/);
+		const loaded = load(Workspace.open(p));
+		poseAt(loaded, "appear", 0.25);
+		const slot = loaded.skeleton.findSlot("wheel")!;
+		expect(slot.appliedPose.color.a).toBeGreaterThan(0.5);
+		expect(slot.appliedPose.color.a).toBeLessThan(1);
+		poseAt(loaded, "appear", 0.7);
+		expect(loaded.skeleton.findSlot("wheel")!.appliedPose.getAttachment()).toBeNull();
+	});
 });

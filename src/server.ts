@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { bounce, EASES, oscillate, PROPERTIES, tween, writeKeys } from "./motion.js";
+import { bounce, EASES, gait, oscillate, PROPERTIES, SLOT_PROPERTIES, tween, writeKeys, writeSlotKeys } from "./motion.js";
 import { importProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
 import { importPsd } from "./psd.js";
@@ -22,7 +22,7 @@ import {
 	updateBone,
 	updateSlot,
 } from "./rig.js";
-import { load, validate } from "./runtime.js";
+import { footSlip, load, validate } from "./runtime.js";
 import * as templates from "./templates.js";
 import type { ConstraintJson } from "./types.js";
 import { checkName, UserError, Workspace } from "./workspace.js";
@@ -555,6 +555,84 @@ export function createServer(): McpServer {
 			},
 		},
 		(a) => edit(a.project, `bounce ${a.bones.join(",")}.${a.property}`, (ws) => bounce(ws, a)),
+	);
+
+	server.registerTool(
+		"anim_slot_keys",
+		{
+			description:
+				"Key a slot: alpha (fade in/out, 0..1), rgba (tint RRGGBBAA, linear/stepped) or attachment (swap images: " +
+				"blink, mouth shapes; name null hides). Replaces keys between the first and last given time.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				slot: z.string(),
+				property: z.enum(SLOT_PROPERTIES),
+				keys: z
+					.array(
+						z.object({
+							time: z.number().min(0),
+							value: z.number().min(0).max(1).optional(),
+							color: z.string().optional(),
+							name: z.string().nullable().optional(),
+							ease: z.enum(EASES).optional(),
+						}),
+					)
+					.min(1),
+			},
+		},
+		(a) => edit(a.project, `slot keys ${a.animation} ${a.slot}.${a.property}`, (ws) => writeSlotKeys(ws, a.animation, a.slot, a.property, a.keys)),
+	);
+
+	server.registerTool(
+		"anim_gait",
+		{
+			description:
+				"Walk or run cycle in place for IK feet (e.g. biped left-leg-target phase 0, right-leg-target phase 0.5). " +
+				"Planted feet slide back at constant speed; reports the ground speed to move the character at. " +
+				"Walk: contact ~0.6, run: ~0.35 with more lift and bob.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				feet: z.array(z.object({ bone: z.string(), phase: z.number().min(0).max(1) })).min(1),
+				body: z.string().optional().describe("Bone that bobs, e.g. hips"),
+				period: z.number().positive(),
+				stride: z.number().positive(),
+				lift: z.number().min(0),
+				contact: z.number().min(0.1).max(0.9).optional(),
+				bob: z.number().min(0).optional(),
+				start: z.number().min(0).optional(),
+				cycles: z.number().int().min(1).max(20).optional(),
+			},
+		},
+		(a) => edit(a.project, `gait ${a.animation}`, (ws) => gait(ws, a)),
+	);
+
+	server.registerTool(
+		"motion_check",
+		{
+			description:
+				"Check feet for sliding: while a foot bone is on the ground its horizontal speed must stay constant " +
+				"(0 when standing still, the ground speed in an in-place cycle).",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				feet: z.array(z.string()).min(1).describe("Bones whose origin is the foot contact point (IK targets)"),
+				tolerance: z.number().min(0).optional().describe("Height above ground still counted as contact (px, default 1)"),
+				maxSlip: z.number().min(0).optional().describe("Allowed speed change while planted, px/frame (default 0.5)"),
+			},
+		},
+		({ project, animation, feet, tolerance, maxSlip }) =>
+			run(() => {
+				const limit = maxSlip ?? 0.5;
+				const reports = footSlip(Workspace.open(project), animation, feet, tolerance);
+				const bad = reports.filter((r) => r.slip > limit);
+				const lines = reports.map(
+					(r) =>
+						`${r.bone}: ${r.contactFrames} planted frames, speed ${r.speed.toFixed(1)} px/s, slip ${r.slip.toFixed(3)} px/frame`,
+				);
+				return { isError: bad.length > 0, content: [{ type: "text", text: [bad.length ? "SLIDING" : "OK", ...lines].join("\n") }] };
+			}),
 	);
 
 	server.registerTool(

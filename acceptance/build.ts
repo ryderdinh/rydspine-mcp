@@ -4,6 +4,7 @@
 import { cpSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { connect, type Result } from "../test/helpers.js";
+import { collect, render } from "../src/ui.js";
 import { Painter, type RGB } from "./art.js";
 
 type Ok = (name: string, args?: Record<string, unknown>) => Promise<Result>;
@@ -352,6 +353,11 @@ export async function buildAll(outDir: string): Promise<AssetReport[]> {
 	}
 	mkdirSync(outDir, { recursive: true });
 	writeFileSync(join(outDir, "report.json"), `${JSON.stringify(reports, null, 2)}\n`);
+	// The studio page for these assets; studio.html is the fragment for publishing, studio-local.html opens directly.
+	const extras = Object.fromEntries(reports.map((r) => [r.project, r]));
+	const subtitle = "Six acceptance assets, rigged and animated through the rydspine MCP tools";
+	writeFileSync(join(outDir, "studio.html"), render(collect(extras), { player: "cdn", document: false, subtitle }));
+	writeFileSync(join(outDir, "studio-local.html"), render(collect(extras), { player: "cdn", document: true, subtitle }));
 	return reports;
 }
 

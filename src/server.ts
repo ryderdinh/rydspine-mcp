@@ -24,6 +24,7 @@ import {
 } from "./rig.js";
 import { footSlip, load, validate } from "./runtime.js";
 import * as templates from "./templates.js";
+import { startStudio } from "./ui.js";
 import type { ConstraintJson } from "./types.js";
 import { checkName, UserError, Workspace } from "./workspace.js";
 
@@ -703,6 +704,27 @@ export function createServer(): McpServer {
 				if (!report.ok) throw new UserError(`fix validation errors first:\n${report.errors.join("\n")}`);
 				const { dir, files } = exportProject(ws, outDir);
 				return text(`exported to ${dir}:\n${files.join("\n")}`);
+			}),
+	);
+
+	let studio: Promise<{ url: string }> | null = null;
+	server.registerTool(
+		"ui_open",
+		{
+			description:
+				"Start rydspine studio, a local web page that plays every project's animations with the Spine player and " +
+				"shows rigs, checks, versions and frame previews. Returns the URL to open in a browser.",
+			inputSchema: { port: z.number().int().min(1024).max(65535).optional() },
+		},
+		({ port }) =>
+			run(async () => {
+				studio ??= startStudio(port ?? 5180);
+				try {
+					return text(`rydspine studio is running at ${(await studio).url}`);
+				} catch (e) {
+					studio = null;
+					throw new UserError(`could not start the studio: ${(e as Error).message}`);
+				}
 			}),
 	);
 

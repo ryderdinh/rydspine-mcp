@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { RegionAttachment } from "@esotericsoftware/spine-core";
+import { PNG } from "pngjs";
 import { load, poseAt } from "../src/runtime.js";
 import { createServer } from "../src/server.js";
 import { Workspace } from "../src/workspace.js";
@@ -191,7 +192,7 @@ describe("rydspine end to end", () => {
 		const dir = join(root, project, "export");
 		for (const f of ["critter.json", "critter.atlas", "critter.png", "critter.html"]) expect(existsSync(join(dir, f))).toBe(true);
 		const json = JSON.parse(readFileSync(join(dir, "critter.json"), "utf8"));
-		expect(json.skeleton.spine).toBe("4.3");
+		expect(json.skeleton.spine).toBe("4.3.75-beta");
 		expect(r.text).toContain("exported");
 
 		const { chromium } = createRequire(import.meta.url)("playwright");
@@ -205,4 +206,61 @@ describe("rydspine end to end", () => {
 			await browser.close();
 		}
 	}, 30000);
+});
+
+describe("existing Spine project (coin, exported by Spine 4.3.75-beta)", () => {
+	const COIN = resolve("test/fixtures/coin");
+
+	it("unpacks the atlas back into the original images", async () => {
+		const r = await ok("project_import", {
+			name: "coin-atlas",
+			skeleton: join(COIN, "coin-pro.json"),
+			atlas: join(COIN, "coin.atlas"),
+			loops: ["animation"],
+		});
+		expect(r.text).toContain("unpacked 7 images");
+		const ws = Workspace.open("coin-atlas");
+		for (const name of ws.imageNames()) {
+			const a = PNG.sync.read(readFileSync(ws.imagePath(name)));
+			const b = PNG.sync.read(readFileSync(join(COIN, "images", `${name}.png`)));
+			expect([a.width, a.height]).toEqual([b.width, b.height]);
+			expect(Buffer.compare(a.data, b.data)).toBe(0);
+		}
+	});
+
+	it("imports, validates, previews and edits the coin", async () => {
+		const r = await ok("project_import", {
+			name: "coin",
+			skeleton: join(COIN, "coin-pro.json"),
+			images: join(COIN, "images"),
+			loops: ["animation"],
+		});
+		expect(r.text).toContain("copied 7 images");
+		expect(r.text).toContain("clipping -> bone clipping");
+		const v = await ok("validate", { project: "coin" });
+		expect(v.text).toMatch(/animation: 2\.667s, loop seam 0\.000px/);
+		const shot = await ok("preview", { project: "coin", animation: "animation", frames: 8, showBones: false });
+		expect(shot.content.some((c) => c.type === "image")).toBe(true);
+
+		// Add a new animation with rydspine's own tools on top of the imported rig.
+		await ok("anim_create", { project: "coin", name: "pop", loop: false });
+		await ok("anim_bounce", { project: "coin", animation: "pop", bones: ["root"], property: "scalex", from: 0, to: 1, duration: 0.8 });
+		await ok("anim_bounce", { project: "coin", animation: "pop", bones: ["root"], property: "scaley", from: 0, to: 1, duration: 0.8 });
+		await ok("validate", { project: "coin" });
+		await ok("preview", { project: "coin", animation: "pop", frames: 6, showBones: false });
+
+		// The export loads back as a fresh import: the round trip keeps the original animation intact.
+		await ok("export", { project: "coin" });
+		const exported = join(root, "coin", "export");
+		await ok("project_import", { name: "coin-again", skeleton: join(exported, "coin.json"), atlas: join(exported, "coin.atlas") });
+		const again = JSON.parse(readFileSync(join(root, "coin-again", "skeleton.json"), "utf8"));
+		const original = JSON.parse(readFileSync(join(COIN, "coin-pro.json"), "utf8"));
+		expect(again.animations.animation).toEqual(original.animations.animation);
+		expect(Object.keys(again.animations)).toEqual(["animation", "pop"]);
+	});
+
+	it("rejects binary and pre-4.3 files with a clear message", async () => {
+		const bin = await call("project_import", { name: "bin", skeleton: join(COIN, "coin.png"), atlas: join(COIN, "coin.atlas") });
+		expect(bin.text).toMatch(/only skeleton JSON/);
+	});
 });

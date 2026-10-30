@@ -3,7 +3,7 @@
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { MeshAttachment, RegionAttachment } from "@esotericsoftware/spine-core";
+import { ClippingAttachment, MeshAttachment, RegionAttachment } from "@esotericsoftware/spine-core";
 import { composePage, imageSize, pack } from "./atlas.js";
 import { FPS, type Loaded, load, play } from "./runtime.js";
 import { UserError, type Workspace } from "./workspace.js";
@@ -38,7 +38,19 @@ function affine(p: number[][], q: number[][]): string {
 	return `matrix(${[a, b, c, d, e, f].map((n) => n.toFixed(5)).join(",")})`;
 }
 
-function drawFrame(ws: Workspace, loaded: Loaded, time: number, showBones: boolean, clipIds: { n: number }): Frame {
+/** SVG-safe ids for image names, which may contain folders and spaces. */
+function imageIds(ws: Workspace): Map<string, string> {
+	return new Map(ws.imageNames().map((name, i) => [name, `img${i}`]));
+}
+
+function drawFrame(
+	ws: Workspace,
+	loaded: Loaded,
+	time: number,
+	showBones: boolean,
+	clipIds: { n: number },
+	ids: Map<string, string>,
+): Frame {
 	const { skeleton } = loaded;
 	const parts: string[] = [];
 	const xs: number[] = [];
@@ -48,16 +60,30 @@ function drawFrame(ws: Workspace, loaded: Loaded, time: number, showBones: boole
 		ys.push(-y);
 		return [x, -y];
 	};
+	let clipEnd: unknown = null;
+	const alpha = skeleton.color.a;
 	for (const slot of skeleton.drawOrder.appliedPose) {
 		const att = slot.appliedPose.getAttachment();
-		if (att instanceof RegionAttachment) {
+		const a = alpha * slot.appliedPose.color.a;
+		const opacity = a < 0.999 ? ` opacity="${f2(Math.max(0, a))}"` : "";
+		if (att instanceof ClippingAttachment) {
+			if (clipEnd) parts.push("</g>");
+			const n = att.worldVerticesLength;
+			const v = new Array<number>(n);
+			att.computeWorldVertices(skeleton, slot, 0, n, v, 0, 2);
+			const poly: string[] = [];
+			for (let i = 0; i < n; i += 2) poly.push(pt(v[i], v[i + 1]).map(f2).join(","));
+			const id = `c${clipIds.n++}`;
+			parts.push(`<clipPath id="${id}"><polygon points="${poly.join(" ")}"/></clipPath><g clip-path="url(#${id})">`);
+			clipEnd = att.endSlot ?? "end";
+		} else if (att instanceof RegionAttachment) {
 			const v = new Array<number>(8);
 			att.computeWorldVertices(slot, att.getOffsets(slot.appliedPose), v, 0, 2);
 			const { width, height } = imageSize(join(ws.imagesDir, `${att.path}.png`));
 			const [bl, ul, ur] = [pt(v[0], v[1]), pt(v[2], v[3]), pt(v[4], v[5])];
 			pt(v[6], v[7]);
 			const m = affine([[0, 0], [width, 0], [0, height]], [ul, ur, bl]);
-			if (m) parts.push(`<use href="#img-${att.path}" transform="${m}"/>`);
+			if (m) parts.push(`<use href="#${ids.get(att.path!)}" transform="${m}"${opacity}/>`);
 		} else if (att instanceof MeshAttachment) {
 			const n = att.worldVerticesLength;
 			const v = new Array<number>(n);
@@ -74,11 +100,16 @@ function drawFrame(ws: Workspace, loaded: Loaded, time: number, showBones: boole
 				const poly = q.map(([x, y]) => `${f2(x)},${f2(y)}`).join(" ");
 				parts.push(
 					`<clipPath id="${id}"><polygon points="${poly}" stroke="#000" stroke-width="0.6"/></clipPath>` +
-						`<g clip-path="url(#${id})"><use href="#img-${att.path}" transform="${m}"/></g>`,
+						`<g clip-path="url(#${id})"><use href="#${ids.get(att.path!)}" transform="${m}"${opacity}/></g>`,
 				);
 			}
 		}
+		if (clipEnd === slot.data) {
+			parts.push("</g>");
+			clipEnd = null;
+		}
 	}
+	if (clipEnd) parts.push("</g>");
 	if (showBones) {
 		for (const bone of skeleton.bones) {
 			const p = bone.appliedPose;
@@ -104,10 +135,11 @@ export interface PreviewSpec {
 export function renderSvg(ws: Workspace, spec: PreviewSpec): string {
 	const loaded = load(ws);
 	const clipIds = { n: 0 };
+	const ids = imageIds(ws);
 	const showBones = spec.showBones ?? true;
 	const frames: Frame[] = [];
 	if (!spec.animation) {
-		frames.push(drawFrame(ws, loaded, 0, showBones, clipIds));
+		frames.push(drawFrame(ws, loaded, 0, showBones, clipIds, ids));
 	} else {
 		const animation = loaded.data.findAnimation(spec.animation);
 		if (!animation) throw new UserError(`animation "${spec.animation}" not found`);
@@ -118,7 +150,7 @@ export function renderSvg(ws: Workspace, spec: PreviewSpec): string {
 		const last = Math.max(...wanted.keys());
 		play(loaded, spec.animation, last, (frame) => {
 			const t = wanted.get(frame);
-			if (t !== undefined) frames.push(drawFrame(ws, loaded, t, showBones, clipIds));
+			if (t !== undefined) frames.push(drawFrame(ws, loaded, t, showBones, clipIds, ids));
 		});
 	}
 	const minX = Math.min(...frames.map((f) => f.minX)) - FRAME_PAD;
@@ -130,7 +162,7 @@ export function renderSvg(ws: Workspace, spec: PreviewSpec): string {
 		.map((name) => {
 			const data = readFileSync(join(ws.imagesDir, `${name}.png`)).toString("base64");
 			const { width, height } = imageSize(join(ws.imagesDir, `${name}.png`));
-			return `<image id="img-${name}" width="${width}" height="${height}" href="data:image/png;base64,${data}"/>`;
+			return `<image id="${ids.get(name)}" width="${width}" height="${height}" href="data:image/png;base64,${data}"/>`;
 		})
 		.join("");
 	const cells = frames

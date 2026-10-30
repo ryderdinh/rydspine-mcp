@@ -57,12 +57,12 @@ export function poseAt(loaded: Loaded, animationName: string, t: number): void {
 	loaded.skeleton.updateWorldTransform(Physics.none);
 }
 
-/** Plays an animation from the start with physics, calling visit at each frame. */
-export function play(loaded: Loaded, animationName: string, frames: number, visit: (frame: number) => void): void {
+/** Plays an animation from the start with physics, calling visit at each frame. One-shot animations hold their last pose. */
+export function play(loaded: Loaded, animationName: string, frames: number, visit: (frame: number) => void, loop = true): void {
 	const { data, skeleton } = loaded;
 	skeleton.setupPose();
 	const state = new AnimationState(new AnimationStateData(data));
-	state.setAnimation(0, animationName, true);
+	state.setAnimation(0, animationName, loop);
 	const dt = 1 / FPS;
 	for (let i = 0; i <= frames; i++) {
 		if (i > 0) {

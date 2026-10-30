@@ -148,10 +148,11 @@ export function renderSvg(ws: Workspace, spec: PreviewSpec): string {
 		const times = spec.times ?? Array.from({ length: count }, (_, i) => (count === 1 ? 0 : (duration * i) / (count - 1)));
 		const wanted = new Map(times.map((t) => [Math.round(t * FPS), t]));
 		const last = Math.max(...wanted.keys());
-		play(loaded, spec.animation, last, (frame) => {
+		const visit = (frame: number) => {
 			const t = wanted.get(frame);
 			if (t !== undefined) frames.push(drawFrame(ws, loaded, t, showBones, clipIds, ids));
-		});
+		};
+		play(loaded, spec.animation, last, visit, ws.meta.loops[spec.animation] ?? false);
 	}
 	const minX = Math.min(...frames.map((f) => f.minX)) - FRAME_PAD;
 	const minY = Math.min(...frames.map((f) => f.minY)) - FRAME_PAD;

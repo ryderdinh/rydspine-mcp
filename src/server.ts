@@ -8,6 +8,7 @@ import { z } from "zod";
 import { bounce, EASES, oscillate, PROPERTIES, tween, writeKeys } from "./motion.js";
 import { importProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
+import { importPsd } from "./psd.js";
 import {
 	addBone,
 	addConstraint,
@@ -27,7 +28,7 @@ import { checkName, UserError, Workspace } from "./workspace.js";
 
 const INSTRUCTIONS = `rydspine builds Spine 4.3 rigs and animations as files.
 Existing Spine exports can be brought in with project_import and edited with the same tools.
-Workflow: project_create -> image_import (place each part at its world position) -> bone_add (joints, world space)
+Workflow: project_create -> psd_import or image_import (place each part at its world position) -> bone_add (joints, world space)
 -> slot_update (bind parts to bones, keepWorld) -> mesh_generate / constraint_add where parts bend or follow
 -> anim_create + anim_oscillate / anim_tween / anim_bounce / anim_set_keys -> validate -> preview -> export.
 Coordinates: world space is y-up, units are pixels, rotations are degrees counter-clockwise.
@@ -136,6 +137,33 @@ export function createServer(): McpServer {
 					.map((i) => `${i.slot}: ${i.width}x${i.height}`)
 					.join("\n"),
 			),
+	);
+
+	server.registerTool(
+		"psd_import",
+		{
+			description:
+				"Import every visible pixel layer of a PSD as a part (image + slot), keeping position, layer order, " +
+				"opacity and blend mode. World origin defaults to the bottom-center of the canvas (where feet stand).",
+			inputSchema: {
+				project,
+				psd: z.string().describe("Path to the .psd file"),
+				origin: z.enum(["bottom-center", "center", "top-left"]).optional(),
+				includeHidden: z.boolean().optional().describe("Also import hidden layers (with nothing shown)"),
+				keepGroups: z.boolean().optional().describe("Name images group/layer instead of layer"),
+			},
+		},
+		({ project, ...spec }) =>
+			edit(project, `import PSD ${spec.psd}`, (ws) => {
+				const r = importPsd(ws, spec);
+				return [
+					`canvas ${r.canvas}; ${r.parts.length} parts (back to front):`,
+					...r.parts.map(
+						(p) => `  ${p.slot}: ${p.width}x${p.height} at (${p.x}, ${p.y})${p.note ? ` - ${p.note}` : ""}`,
+					),
+					...(r.skipped.length ? ["skipped:", ...r.skipped.map((s) => `  ${s}`)] : []),
+				].join("\n");
+			}),
 	);
 
 	server.registerTool(

@@ -1,5 +1,5 @@
 // Rig editing: bones, slots, attachments, meshes and constraints.
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { type BonePose, Vector2 } from "@esotericsoftware/spine-core";
 import { imageSize } from "./atlas.js";
 import { boneByName, load } from "./runtime.js";
@@ -209,24 +209,37 @@ export interface ImageItem {
 
 /** Imports PNGs, each as a slot with a region attachment centered at world (x, y). */
 export function importImages(ws: Workspace, items: ImageItem[]): { slot: string; width: number; height: number }[] {
-	const out: { slot: string; width: number; height: number }[] = [];
-	const skin = defaultSkin(ws);
-	for (const item of items) {
-		const name = ws.addImage(item.path, item.name);
-		const { width, height } = imageSize(join(ws.imagesDir, `${name}.png`));
+	return items.map((item) => {
+		const name = item.name ?? basename(item.path).replace(/\.png$/i, "");
 		if (ws.doc.slots.some((s) => s.name === name)) throw new UserError(`slot "${name}" already exists`);
-		const bone = item.bone ?? "root";
-		const parentPose = boneByName(load(ws).skeleton, bone).appliedPose;
-		const local = toLocal(parentPose, item.x ?? 0, item.y ?? 0, 0);
-		const region: RegionJson = { width, height };
-		if (local.x) region.x = local.x;
-		if (local.y) region.y = local.y;
-		if (local.rotation) region.rotation = local.rotation;
-		ws.doc.slots.push({ name, bone, attachment: name });
-		skin.attachments[name] = { [name]: region };
-		out.push({ slot: name, width, height });
-	}
-	return out;
+		ws.addImage(item.path, name);
+		return addPart(ws, { image: name, x: item.x, y: item.y, bone: item.bone });
+	});
+}
+
+export interface Part {
+	image: string;
+	x?: number;
+	y?: number;
+	bone?: string;
+	slot?: Partial<SlotJson>;
+}
+
+/** Adds an image already in the workspace as a new slot (on top) with a region attachment at world (x, y). */
+export function addPart(ws: Workspace, part: Part): { slot: string; width: number; height: number } {
+	const name = part.image;
+	if (ws.doc.slots.some((s) => s.name === name)) throw new UserError(`slot "${name}" already exists`);
+	const { width, height } = imageSize(ws.imagePath(name));
+	const bone = part.bone ?? "root";
+	const parentPose = boneByName(load(ws).skeleton, bone).appliedPose;
+	const local = toLocal(parentPose, part.x ?? 0, part.y ?? 0, 0);
+	const region: RegionJson = { width, height };
+	if (local.x) region.x = local.x;
+	if (local.y) region.y = local.y;
+	if (local.rotation) region.rotation = local.rotation;
+	ws.doc.slots.push({ ...part.slot, name, bone, attachment: name });
+	defaultSkin(ws).attachments[name] = { [name]: region };
+	return { slot: name, width, height };
 }
 
 export interface SlotUpdate {

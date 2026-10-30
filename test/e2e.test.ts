@@ -1,5 +1,5 @@
 // Drives the server through a real MCP client, building a small creature end to end.
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { RegionAttachment } from "@esotericsoftware/spine-core";
+import { writePsdBuffer } from "ag-psd";
 import { PNG } from "pngjs";
 import { load, poseAt } from "../src/runtime.js";
 import { createServer } from "../src/server.js";
@@ -262,5 +263,66 @@ describe("existing Spine project (coin, exported by Spine 4.3.75-beta)", () => {
 	it("rejects binary and pre-4.3 files with a clear message", async () => {
 		const bin = await call("project_import", { name: "bin", skeleton: join(COIN, "coin.png"), atlas: join(COIN, "coin.atlas") });
 		expect(bin.text).toMatch(/only skeleton JSON/);
+	});
+});
+
+describe("PSD import", () => {
+	function solid(width: number, height: number, rgba: number[]) {
+		const data = new Uint8ClampedArray(width * height * 4);
+		for (let i = 0; i < data.length; i += 4) data.set(rgba, i);
+		return { width, height, data };
+	}
+	const layer = (name: string, left: number, top: number, w: number, h: number, rgba: number[], extra: object = {}) => ({
+		name,
+		left,
+		top,
+		right: left + w,
+		bottom: top + h,
+		imageData: solid(w, h, rgba),
+		...extra,
+	});
+
+	it("imports layers in order with position, opacity, blend and hidden handling", async () => {
+		const file = join(root, "hero.psd");
+		const psd = {
+			width: 200,
+			height: 300,
+			children: [
+				layer("shadow", 50, 280, 100, 20, [0, 0, 0, 255], { opacity: 0.5, blendMode: "multiply" }),
+				{
+					name: "body",
+					children: [
+						layer("legs", 70, 180, 60, 100, [40, 40, 160, 255]),
+						layer("torso", 60, 80, 80, 110, [200, 60, 60, 255]),
+						layer("head", 70, 20, 60, 60, [240, 200, 160, 255]),
+					],
+				},
+				layer("sketch", 0, 0, 200, 300, [255, 0, 0, 255], { hidden: true }),
+				layer("glow", 80, 30, 40, 40, [255, 255, 200, 255], { blendMode: "linear dodge" }),
+			],
+		};
+		writeFileSync(file, writePsdBuffer(psd as never));
+
+		await ok("project_create", { name: "hero" });
+		const r = await ok("psd_import", { project: "hero", psd: file });
+		expect(r.text).toContain("5 parts");
+		expect(r.text).toContain("sketch (hidden)");
+
+		const ws = Workspace.open("hero");
+		expect(ws.doc.slots.map((s) => s.name)).toEqual(["shadow", "legs", "torso", "head", "glow"]);
+		const slot = (n: string) => ws.doc.slots.find((s) => s.name === n)!;
+		expect(slot("shadow")).toMatchObject({ color: "ffffff80", blend: "multiply" });
+		expect(slot("glow").blend).toBe("additive");
+		// Bottom-center origin: the head (x 70..130, y 20..80 in the PSD) is centered above the origin.
+		const headRegion = ws.doc.skins[0].attachments.head.head;
+		expect(headRegion).toMatchObject({ y: 250, width: 60, height: 60 });
+		expect(headRegion.x).toBeUndefined();
+		const head = PNG.sync.read(readFileSync(ws.imagePath("head")));
+		expect([...head.data.subarray(0, 4)]).toEqual([240, 200, 160, 255]);
+		await ok("validate", { project: "hero" });
+
+		const groups = await ok("psd_import", { project: "hero", psd: file, keepGroups: true, includeHidden: true });
+		expect(groups.text).toContain("body/torso");
+		expect(Workspace.open("hero").doc.slots.find((s) => s.name === "sketch-2")?.attachment).toBeUndefined();
 	});
 });

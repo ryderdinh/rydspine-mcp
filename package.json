@@ -1,0 +1,19 @@
+{
+  "name": "rydspine-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spine 4.3 rigging and animation MCP",
+  "type": "module",
+  "scripts": {
+    "spike:check": "tsx spike/runtime-check.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@esotericsoftware/spine-core": "4.3.13"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

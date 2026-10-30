@@ -109,6 +109,8 @@ Một thư viện **motion primitive** có tham số. LLM ghép các primitive t
 | **6. Chỉnh sửa** | Chỉnh có phạm vi, khóa, diff/revert, nhập lại JSON từ Spine | Chỉnh một phần không làm đổi phần còn lại (so diff) |
 | **7. Đầu ra & nghiệm thu** | `export_spine_project`, `report`, chạy bộ nghiệm thu | Đạt tiêu chí mục 9 của `REQUIREMENTS.md` |
 
+Tiến độ giai đoạn 0: xem `spike/README.md`. Đã chạy được runtime 4.3 headless; còn chờ chạy thử Spine CLI trên máy người dùng.
+
 Giai đoạn 2 và 3 có thể làm song song sau khi lõi xong. Giai đoạn 5 nên bắt đầu sớm ở mức tối thiểu (render frame) để dùng kiểm tra cho giai đoạn 3–4.
 
 ## 9. Bộ nghiệm thu đề xuất
@@ -126,8 +128,8 @@ Ngoài kiểm tra tự động, mỗi mẫu cần người duyệt bằng mắt 
 
 ## 10. Rủi ro
 
-- **Spine CLI và license:** người dùng đã có license Spine. Còn cần xác nhận bản Essential hay Professional, vì mesh, weights, IK và physics cần bản Professional. Server cần chạy trên máy đã cài và kích hoạt Spine Editor để gọi CLI. Key không được commit vào repo; nếu cần chạy CI thì đưa vào biến môi trường hoặc secret.
-- **Thay đổi định dạng 4.3:** cần xác minh schema JSON và phiên bản runtime chính xác, ghim phiên bản package.
+- **Spine CLI và license:** người dùng có license Spine Professional. Lưu ý: mesh, weights, IK và physics cần bản Professional. Server cần chạy trên máy đã cài và kích hoạt Spine Editor để gọi CLI. Key không được commit vào repo; nếu cần chạy CI thì đưa vào biến môi trường hoặc secret.
+- **Thay đổi định dạng 4.3:** đã xác nhận JSON 4.3 gộp các constraint vào một mảng `constraints` có `type`. Ghim `spine-core` 4.3.13 và chỉnh lại khi biết phiên bản Editor chính xác.
 - **Chất lượng tự động:** pivot và weights tự động có thể sai với asset lạ. Giảm thiểu bằng bước duyệt kết quả phân tích, `pose_test` và chỉnh tay qua tool.
 - **Chất lượng chuyển động chủ quan:** cần mẫu tham chiếu và ngưỡng cụ thể trước nghiệm thu.
 
@@ -143,7 +145,7 @@ Ngoài kiểm tra tự động, mỗi mẫu cần người duyệt bằng mắt 
 ## 12. Cần người dùng xác nhận trước giai đoạn 1
 
 1. Phạm vi v1 ở mục 1 (đặc biệt: loại ảnh phẳng ra khỏi v1).
-2. ~~Có license Spine không?~~ Đã có. Còn cần xác nhận: bản Essential hay Professional, phiên bản 4.3.x cụ thể, và hệ điều hành của máy chạy server.
+2. ~~License Spine?~~ Professional. Còn cần: phiên bản 4.3.x cụ thể và hệ điều hành của máy chạy server.
 3. Runtime đích (web, Unity, Godot, ...)?
 4. Mức tự động hóa: dừng ở bước phân tích để người dùng duyệt, hay chạy thẳng tới animation?
 5. Stack TypeScript/Node có phù hợp không?

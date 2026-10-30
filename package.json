@@ -8,7 +8,8 @@
     "start": "tsx src/index.ts",
     "test": "vitest run",
     "typecheck": "tsc",
-    "spike:check": "tsx spike/runtime-check.ts"
+    "spike:check": "tsx spike/runtime-check.ts",
+    "acceptance": "tsx acceptance/build.ts"
   },
   "dependencies": {
     "@esotericsoftware/spine-core": "4.3.13",

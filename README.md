@@ -32,8 +32,16 @@ Dự án được lưu trong `workspaces/` (đổi bằng biến `RYDSPINE_WORKS
 3. `rig_template` (chuỗi, bản lề, bánh xe, chi IK, nhân vật 2 chân) hoặc `bone_add` (`space: "world"`): đặt xương tại các khớp trên hình.
 4. `slot_update`: gắn bộ phận vào xương; hình giữ nguyên vị trí.
 5. `mesh_generate` (mặc định bám theo viền ảnh), `constraint_add`: thêm phần uốn cong, IK, physics.
-6. `anim_create`, rồi `anim_oscillate` / `anim_tween` / `anim_bounce` / `anim_set_keys`.
-7. `validate` → `preview` → `export`.
+6. `anim_create`, rồi `anim_oscillate` / `anim_tween` / `anim_bounce` / `anim_gait` / `anim_set_keys` / `anim_slot_keys`.
+7. `validate`, `motion_check` → `preview` → `export`.
+
+## Giao diện
+
+Chạy `npm run ui` (hoặc gọi tool `ui_open`) rồi mở http://127.0.0.1:5180. Trang **rydspine studio** phát animation của mọi dự án bằng player Spine, và hiện kết quả kiểm tra, cây xương, lịch sử phiên bản cùng dải khung hình.
+
+## Bộ nghiệm thu
+
+Chạy `npm run acceptance` để dựng 6 asset mẫu (nhân vật, rồng, cây, rương, xe, logo) qua tool MCP. Kết quả nằm trong `acceptance/out/`: file xuất cho từng asset, `report.json` và trang `studio-local.html`.
 
 Mỗi thao tác lưu thành một phiên bản: `history_list` để xem, `history_revert` để quay lại, `lock_set` để khóa phần đã duyệt.
 

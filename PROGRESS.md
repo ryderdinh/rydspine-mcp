@@ -10,10 +10,10 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 | 1. Lõi | ✅ Xong bản đầu | MCP server, workspace, lịch sử phiên bản, validate, export |
 | 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận) và project Spine 4.3 có sẵn. Chưa đọc file binary `.skel`; ảnh phẳng chưa tách bộ phận để sau v1 |
 | 3. Rig | 🟡 Gần xong | Có bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi, bản lề, bánh xe, chi IK, 2 chân). Chưa có pose_test, mẫu 4 chân, mẫu cánh |
-| 4. Animation | 🟡 Một phần | Có oscillate (kèm follow-through), tween (kèm anticipation), bounce, key tay. Chưa có walk/run cycle, chưa có slot/color timeline |
-| 5. Kiểm tra & preview | 🟡 Một phần | Có validate, preview ảnh nhiều khung (cả clipping và độ trong suốt), trang HTML player. Chưa có kiểm tra trượt chân / biến dạng |
+| 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
+| 5. Kiểm tra & preview | ✅ Xong bản đầu | validate, kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio**. Chưa đo biến dạng mesh bất thường |
 | 6. Chỉnh sửa | 🟡 Một phần | Có khóa, revert, sửa theo khoảng thời gian. Chưa có diff giữa các phiên bản, chưa nhập lại JSON sửa trong Spine |
-| 7. Đầu ra & nghiệm thu | ⬜ Chưa bắt đầu | Chưa có bộ 6 asset nghiệm thu |
+| 7. Đầu ra & nghiệm thu | 🟡 Một phần | Bộ 6 asset nghiệm thu chạy tự động và đạt hết kiểm tra, nhưng dùng art tự vẽ. Chưa nghiệm thu trên art thật; chưa xác nhận Spine Editor mở được file xuất ra |
 
 ## Quyết định đã chốt
 
@@ -25,7 +25,8 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 ## Còn chờ người dùng
 
 - Runtime đích (web, Unity, Godot…).
-- Asset mẫu thật (được phép dùng) cho bộ nghiệm thu. Đã có: coin (mẫu chính thức của Spine).
+- Asset mẫu thật (được phép dùng) cho bộ nghiệm thu. Đã có: coin (mẫu chính thức của Spine). Người dùng không có PSD, nên tạm dùng art tự vẽ bằng code.
+- Nhờ người có Spine 4.3.75-beta mở một file JSON xuất ra bằng File → Import Data để xác nhận.
 
 ## Nhật ký
 
@@ -71,10 +72,31 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Lỗi test bắt được và đã sửa: IK gập ngược chiều so với hình vẽ. Giờ gối và khuỷu tay giữ đúng vị trí đã vẽ.
 - Test: 20 test đạt (e2e, mesh theo viền, mẫu rig).
 
+### 2026-10-30 (tiếp 3)
+- Thêm tool:
+  - `anim_slot_keys`: độ trong suốt, màu, đổi hình;
+  - `anim_gait`: chu kỳ đi/chạy tại chỗ, báo tốc độ di chuyển khớp với bước chân;
+  - `motion_check`: phát hiện chân trượt khi đang chạm đất;
+  - `ui_open`: mở giao diện studio.
+- Bộ nghiệm thu `acceptance/` (`npm run acceptance`): dựng 6 asset hoàn toàn qua tool MCP, kiểm tra, preview và xuất file. Có trong test tự động.
+  - Nhân vật chạy → dừng → vung kiếm: không trượt chân, cả khi chạy lẫn khi dừng.
+  - Rồng vỗ cánh, cổ và đuôi trễ pha theo.
+  - Cây trong gió, mỗi nhánh một nhịp.
+  - Rương nảy lên, mở nắp có nảy, ánh sáng hiện dần.
+  - Xe lăn bánh (144,5 px/s), thân nhún.
+  - Logo bật ra, nảy, ổn định, có tia lấp lánh.
+- Lỗi đã sửa: preview của animation không lặp quay về khung đầu ở thời điểm kết thúc (logo biến mất ở khung cuối).
+- Giao diện **rydspine studio** (`npm run ui` hoặc tool `ui_open`):
+  - phát animation bằng player Spine chính hãng;
+  - xem yêu cầu, kết quả kiểm tra, cây xương, lịch sử phiên bản và dải khung hình;
+  - chạy được trên máy tính và điện thoại, nền sáng và nền tối.
+  - Bản studio của 6 asset đã đăng làm trang web riêng tư.
+- Test: 23 test đạt.
+
 ## Việc tiếp theo
 
-1. Bộ nghiệm thu 6 asset (`REQUIREMENTS.md` §5): nhân vật chạy → dừng → vung kiếm, rồng vỗ cánh, cây trong gió, rương, xe, logo. Cần asset thật; tạm dùng asset tự vẽ đơn giản.
-2. Chu kỳ đi/chạy cho mẫu 2 chân, có kiểm tra trượt chân.
-3. Timeline cho slot (màu, độ trong suốt, đổi attachment) và draw order.
-4. Mẫu rig 4 chân và cánh.
-5. `history_diff` và nhập lại JSON đã sửa trong Spine.
+1. Nghiệm thu trên art thật khi có asset, và xác nhận Spine Editor nhập được JSON xuất ra.
+2. Mẫu rig 4 chân và cánh nhiều đốt.
+3. Đo biến dạng mesh bất thường (tam giác bị lật hoặc co quá mức).
+4. `history_diff` và nhập lại JSON đã sửa trong Spine.
+5. Đọc file binary `.skel`.

@@ -107,9 +107,12 @@ export interface ProjectMeta {
 	locks: { bones: string[]; slots: string[]; animations: string[] };
 }
 
+/** Editor version written into new skeletons; matches the Spine Editor the JSON will be imported into. */
+export const SPINE_VERSION = process.env.RYDSPINE_SPINE_VERSION ?? "4.3.75-beta";
+
 export function emptySkeleton(): SkeletonDoc {
 	return {
-		skeleton: { spine: "4.3", images: "./images/", audio: "" },
+		skeleton: { spine: SPINE_VERSION, images: "./images/", audio: "" },
 		bones: [{ name: "root" }],
 		slots: [],
 		constraints: [],

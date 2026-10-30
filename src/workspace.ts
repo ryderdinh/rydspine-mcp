@@ -1,6 +1,6 @@
 // A project workspace on disk: the current skeleton, its images, metadata and a snapshot per change.
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { emptySkeleton, type ProjectMeta, type SkeletonDoc } from "./types.js";
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
@@ -14,6 +14,21 @@ export function workspacesRoot(): string {
 export function checkName(kind: string, name: string): string {
 	if (!NAME.test(name)) throw new UserError(`${kind} name "${name}" must match ${NAME}`);
 	return name;
+}
+
+/** Image names may contain folders ("arm/upper"), as Spine attachment paths do. */
+export function checkImagePath(name: string): string {
+	const parts = name.split("/");
+	if (!parts.every((p) => /^[A-Za-z0-9 _.-]+$/.test(p) && p !== "." && p !== ".."))
+		throw new UserError(`image name "${name}" may only use letters, digits, space, _ . - and / between folders`);
+	return name;
+}
+
+function listPngs(dir: string): string[] {
+	if (!existsSync(dir)) return [];
+	return readdirSync(dir, { recursive: true, encoding: "utf8" })
+		.filter((f) => f.toLowerCase().endsWith(".png"))
+		.map((f) => f.split("\\").join("/"));
 }
 
 interface Snapshot {
@@ -35,15 +50,14 @@ export class Workspace {
 		this.meta = meta;
 	}
 
-	static create(name: string): Workspace {
+	/** Creates the project directory. Call commit() once the initial state is in place. */
+	static create(name: string, doc: SkeletonDoc = emptySkeleton()): Workspace {
 		const dir = join(workspacesRoot(), checkName("project", name));
 		if (existsSync(dir)) throw new UserError(`project "${name}" already exists`);
 		mkdirSync(join(dir, "images"), { recursive: true });
 		mkdirSync(join(dir, "history"), { recursive: true });
 		const meta: ProjectMeta = { name, version: 0, loops: {}, locks: { bones: [], slots: [], animations: [] } };
-		const ws = new Workspace(dir, emptySkeleton(), meta);
-		ws.commit("create project");
-		return ws;
+		return new Workspace(dir, doc, meta);
 	}
 
 	static open(name: string): Workspace {
@@ -65,16 +79,25 @@ export class Workspace {
 	}
 
 	imageNames(): string[] {
-		return readdirSync(this.imagesDir)
-			.filter((f) => f.endsWith(".png"))
+		return listPngs(this.imagesDir)
 			.map((f) => f.slice(0, -4))
 			.sort();
 	}
 
+	imagePath(name: string): string {
+		return join(this.imagesDir, `${checkImagePath(name)}.png`);
+	}
+
 	addImage(source: string, name?: string): string {
-		const imageName = checkName("image", name ?? basename(source).replace(/\.png$/i, ""));
-		copyFileSync(source, join(this.imagesDir, `${imageName}.png`));
+		const imageName = checkImagePath(name ?? basename(source).replace(/\.png$/i, ""));
+		mkdirSync(dirname(this.imagePath(imageName)), { recursive: true });
+		copyFileSync(source, this.imagePath(imageName));
 		return imageName;
+	}
+
+	/** Copies every PNG under dir, keeping sub-folders as part of the image name. */
+	addImageDir(dir: string): string[] {
+		return listPngs(dir).map((f) => this.addImage(join(dir, f), f.slice(0, -4)));
 	}
 
 	/** Saves the current state as a new version. */

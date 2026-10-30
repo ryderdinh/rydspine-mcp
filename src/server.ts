@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { bounce, EASES, oscillate, PROPERTIES, tween, writeKeys } from "./motion.js";
+import { importProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
 import {
 	addBone,
@@ -25,6 +26,7 @@ import type { ConstraintJson } from "./types.js";
 import { checkName, UserError, Workspace } from "./workspace.js";
 
 const INSTRUCTIONS = `rydspine builds Spine 4.3 rigs and animations as files.
+Existing Spine exports can be brought in with project_import and edited with the same tools.
 Workflow: project_create -> image_import (place each part at its world position) -> bone_add (joints, world space)
 -> slot_update (bind parts to bones, keepWorld) -> mesh_generate / constraint_add where parts bend or follow
 -> anim_create + anim_oscillate / anim_tween / anim_bounce / anim_set_keys -> validate -> preview -> export.
@@ -70,7 +72,33 @@ export function createServer(): McpServer {
 	server.registerTool(
 		"project_create",
 		{ description: "Create a new empty project (root bone only).", inputSchema: { name: z.string() } },
-		({ name }) => run(() => text(`created project ${Workspace.create(name).meta.name}`)),
+		({ name }) =>
+			run(() => {
+				const ws = Workspace.create(name);
+				ws.commit("create project");
+				return text(`created project ${ws.meta.name}`);
+			}),
+	);
+
+	server.registerTool(
+		"project_import",
+		{
+			description:
+				"Import an existing Spine 4.3 export as a new project so it can be inspected and edited: the skeleton " +
+				"JSON plus either the folder of source images or the .atlas file (its PNG pages are unpacked).",
+			inputSchema: {
+				name: z.string().describe("New project name"),
+				skeleton: z.string().describe("Path to the exported skeleton .json"),
+				images: z.string().optional().describe("Folder of source PNGs (Spine's images folder)"),
+				atlas: z.string().optional().describe("Path to the .atlas, used when there is no images folder"),
+				loops: z.array(z.string()).optional().describe("Animations that should loop seamlessly"),
+			},
+		},
+		(spec) =>
+			run(() => {
+				const { ws, notes } = importProject(spec);
+				return text([...notes, describe(ws)].join("\n"));
+			}),
 	);
 
 	server.registerTool("project_list", { description: "List projects." }, () =>
@@ -116,7 +144,7 @@ export function createServer(): McpServer {
 		({ project, image }) =>
 			run(() => {
 				const ws = Workspace.open(project);
-				const data = readFileSync(join(ws.imagesDir, `${checkName("image", image)}.png`)).toString("base64");
+				const data = readFileSync(ws.imagePath(image)).toString("base64");
 				return { content: [{ type: "image", data, mimeType: "image/png" }] };
 			}),
 	);

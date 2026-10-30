@@ -1,7 +1,8 @@
 // Rig editing: bones, slots, attachments, meshes and constraints.
 import { basename, join } from "node:path";
 import { type BonePose, Vector2 } from "@esotericsoftware/spine-core";
-import { imageSize } from "./atlas.js";
+import { imageSize, readPng } from "./atlas.js";
+import { type ContourOptions, contourMesh } from "./contour.js";
 import { boneByName, load } from "./runtime.js";
 import type { BoneJson, ConstraintJson, MeshJson, RegionJson, SlotJson } from "./types.js";
 import { checkName, UserError, type Workspace } from "./workspace.js";
@@ -332,17 +333,19 @@ export function updateAttachment(ws: Workspace, u: AttachmentUpdate): RegionJson
 	return r;
 }
 
-export interface MeshSpec {
+export interface MeshSpec extends ContourOptions {
 	slot: string;
 	attachment?: string;
-	cols: number;
-	rows: number;
+	/** contour follows the opaque outline of the image; grid covers the whole rectangle. */
+	shape?: "contour" | "grid";
+	cols?: number;
+	rows?: number;
 	bones?: string[];
 	maxInfluences?: number;
 }
 
-/** Replaces a region attachment with a grid mesh, optionally weighted to bones by distance. */
-export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number; triangles: number } {
+/** Replaces a region attachment with a mesh, optionally weighted to bones by distance. */
+export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number; triangles: number; warnings: string[] } {
 	assertUnlocked(ws, "slots", [spec.slot]);
 	const slot = findSlot(ws, spec.slot);
 	const name = spec.attachment ?? slot.attachment ?? spec.slot;
@@ -351,10 +354,40 @@ export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number;
 	if (!att) throw new UserError(`attachment "${name}" not found in slot "${slot.name}"`);
 	if (att.type !== undefined && att.type !== "region") throw new UserError(`attachment "${name}" is not a region`);
 	const r = att as RegionJson;
-	const cols = Math.max(1, Math.round(spec.cols));
-	const rows = Math.max(1, Math.round(spec.rows));
 
-	// Hull vertices first (perimeter, in order), then interior.
+	// Vertices as UVs (0..1, y down), hull first and in order around the outline.
+	let uv: [number, number][];
+	let triangles: number[];
+	let hull: number;
+	let warnings: string[] = [];
+	if ((spec.shape ?? "contour") === "contour") {
+		const png = readPng(ws.imagePath(r.path ?? name));
+		const m = contourMesh(png, spec);
+		uv = m.points.map(([x, y]) => [x / png.width, y / png.height]);
+		({ triangles, hull, warnings } = m);
+	} else {
+		({ uv, triangles, hull } = gridMesh(Math.max(1, Math.round(spec.cols ?? 4)), Math.max(1, Math.round(spec.rows ?? 4))));
+	}
+
+	const local: number[] = [];
+	const rad = ((r.rotation ?? 0) * Math.PI) / 180;
+	const cos = Math.cos(rad);
+	const sin = Math.sin(rad);
+	for (const [u, v] of uv) {
+		const ox = (u - 0.5) * r.width * (r.scaleX ?? 1);
+		const oy = (0.5 - v) * r.height * (r.scaleY ?? 1);
+		local.push((r.x ?? 0) + ox * cos - oy * sin, (r.y ?? 0) + ox * sin + oy * cos);
+	}
+	let vertices = local.map(round);
+	if (spec.bones?.length) vertices = weigh(ws, slot.bone, local, spec.bones, spec.maxInfluences ?? 3);
+	const uvs = uv.flatMap(([u, v]) => [Math.round(u * 1e5) / 1e5, Math.round(v * 1e5) / 1e5]);
+	const mesh: MeshJson = { type: "mesh", uvs, triangles, vertices, hull, width: r.width, height: r.height };
+	if (r.path) mesh.path = r.path;
+	skin.attachments[slot.name][name] = mesh;
+	return { vertices: uv.length, triangles: triangles.length / 3, warnings };
+}
+
+function gridMesh(cols: number, rows: number) {
 	const order: [number, number][] = [];
 	for (let i = 0; i < cols; i++) order.push([i, 0]);
 	for (let j = 0; j < rows; j++) order.push([cols, j]);
@@ -363,20 +396,6 @@ export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number;
 	const hull = order.length;
 	for (let j = 1; j < rows; j++) for (let i = 1; i < cols; i++) order.push([i, j]);
 	const index = new Map(order.map(([i, j], k) => [`${i},${j}`, k]));
-
-	const uvs: number[] = [];
-	const local: number[] = [];
-	const rad = ((r.rotation ?? 0) * Math.PI) / 180;
-	const cos = Math.cos(rad);
-	const sin = Math.sin(rad);
-	for (const [i, j] of order) {
-		const u = i / cols;
-		const v = j / rows;
-		uvs.push(u, v);
-		const ox = (u - 0.5) * r.width * (r.scaleX ?? 1);
-		const oy = (0.5 - v) * r.height * (r.scaleY ?? 1);
-		local.push((r.x ?? 0) + ox * cos - oy * sin, (r.y ?? 0) + ox * sin + oy * cos);
-	}
 	const triangles: number[] = [];
 	for (let j = 0; j < rows; j++) {
 		for (let i = 0; i < cols; i++) {
@@ -387,13 +406,7 @@ export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number;
 			triangles.push(a, b, c, c, d, a);
 		}
 	}
-
-	let vertices = local.map(round);
-	if (spec.bones?.length) vertices = weigh(ws, slot.bone, local, spec.bones, spec.maxInfluences ?? 3);
-	const mesh: MeshJson = { type: "mesh", uvs, triangles, vertices, hull, width: r.width, height: r.height };
-	if (r.path) mesh.path = r.path;
-	skin.attachments[slot.name][name] = mesh;
-	return { vertices: order.length, triangles: triangles.length / 3 };
+	return { uv: order.map(([i, j]) => [i / cols, j / rows] as [number, number]), triangles, hull };
 }
 
 /** Inverse-square distance to each bone segment, keeping the strongest influences. */

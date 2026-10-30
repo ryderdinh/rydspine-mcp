@@ -96,7 +96,7 @@ describe("rydspine end to end", () => {
 		for (const [slot, corners] of Object.entries(before))
 			corners.forEach((n, i) => expect(after[slot][i]).toBeCloseTo(n, 1));
 
-		const mesh = await ok("mesh_generate", { project, slot: "tail", cols: 4, rows: 2, bones: ["tail1", "tail2"] });
+		const mesh = await ok("mesh_generate", { project, slot: "tail", shape: "grid", cols: 4, rows: 2, bones: ["tail1", "tail2"] });
 		expect(mesh.text).toMatch(/15 vertices, 16 triangles/);
 		await ok("constraint_add", { project, constraint: { type: "ik", name: "arm-ik", bones: ["upper", "lower"], target: "target" } });
 		await ok("constraint_add", {

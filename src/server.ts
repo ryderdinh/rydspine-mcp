@@ -259,14 +259,19 @@ export function createServer(): McpServer {
 		"mesh_generate",
 		{
 			description:
-				"Turn a region attachment into a grid mesh so it can bend. Give bones to weight it automatically " +
-				"(by distance to each bone; bind the slot and place bones first).",
+				"Turn a region attachment into a mesh so it can bend. shape=contour (default) follows the image's opaque " +
+				"outline; shape=grid covers the whole rectangle. Give bones to weight it automatically by distance " +
+				"(bind the slot and place bones first).",
 			inputSchema: {
 				project,
 				slot: z.string(),
 				attachment: z.string().optional(),
-				cols: z.number().int().min(1).max(32),
-				rows: z.number().int().min(1).max(32),
+				shape: z.enum(["contour", "grid"]).optional(),
+				detail: z.number().positive().optional().describe("contour: max outline error in px (smaller = more hull vertices)"),
+				spacing: z.number().positive().optional().describe("contour: interior vertex spacing in px"),
+				padding: z.number().min(0).max(16).optional().describe("contour: grow outline by px (default 2)"),
+				cols: z.number().int().min(1).max(32).optional().describe("grid columns (default 4)"),
+				rows: z.number().int().min(1).max(32).optional().describe("grid rows (default 4)"),
 				bones: z.array(z.string()).optional(),
 				maxInfluences: z.number().int().min(1).max(4).optional(),
 			},
@@ -274,7 +279,10 @@ export function createServer(): McpServer {
 		(args) =>
 			edit(args.project, `mesh ${args.slot}`, (ws) => {
 				const r = generateMesh(ws, args);
-				return `${r.vertices} vertices, ${r.triangles} triangles${args.bones ? `, weighted to ${args.bones.join(", ")}` : ""}`;
+				return [
+					`${r.vertices} vertices, ${r.triangles} triangles${args.bones ? `, weighted to ${args.bones.join(", ")}` : ""}`,
+					...r.warnings.map((w) => `warning: ${w}`),
+				].join("\n");
 			}),
 	);
 

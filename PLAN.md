@@ -126,7 +126,7 @@ Ngoài kiểm tra tự động, mỗi mẫu cần người duyệt bằng mắt 
 
 ## 10. Rủi ro
 
-- **Spine CLI và license:** tạo `.spine` phụ thuộc Spine Editor đã cài và có license. Mesh, weights, IK cần bản Professional. Cần xác nhận ở giai đoạn 0. Nếu không có, v1 chỉ giao JSON/atlas để người dùng tự import.
+- **Spine CLI và license:** người dùng đã có license Spine. Còn cần xác nhận bản Essential hay Professional, vì mesh, weights, IK và physics cần bản Professional. Server cần chạy trên máy đã cài và kích hoạt Spine Editor để gọi CLI. Key không được commit vào repo; nếu cần chạy CI thì đưa vào biến môi trường hoặc secret.
 - **Thay đổi định dạng 4.3:** cần xác minh schema JSON và phiên bản runtime chính xác, ghim phiên bản package.
 - **Chất lượng tự động:** pivot và weights tự động có thể sai với asset lạ. Giảm thiểu bằng bước duyệt kết quả phân tích, `pose_test` và chỉnh tay qua tool.
 - **Chất lượng chuyển động chủ quan:** cần mẫu tham chiếu và ngưỡng cụ thể trước nghiệm thu.
@@ -134,7 +134,7 @@ Ngoài kiểm tra tự động, mỗi mẫu cần người duyệt bằng mắt 
 ## 11. Cần người dùng xác nhận trước giai đoạn 1
 
 1. Phạm vi v1 ở mục 1 (đặc biệt: loại ảnh phẳng ra khỏi v1).
-2. Có Spine 4.3 Professional + CLI trên máy chạy server không? Chạy trên hệ điều hành nào?
+2. ~~Có license Spine không?~~ Đã có. Còn cần xác nhận: bản Essential hay Professional, phiên bản 4.3.x cụ thể, và hệ điều hành của máy chạy server.
 3. Runtime đích (web, Unity, Godot, ...)?
 4. Mức tự động hóa: dừng ở bước phân tích để người dùng duyệt, hay chạy thẳng tới animation?
 5. Stack TypeScript/Node có phù hợp không?

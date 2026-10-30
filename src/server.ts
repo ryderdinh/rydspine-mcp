@@ -1,0 +1,506 @@
+// MCP tool surface. Every editing tool runs on a fresh copy of the project, checks the result with the
+// Spine 4.3 runtime, and only then saves it as a new version (so a rejected edit changes nothing).
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import { bounce, EASES, oscillate, PROPERTIES, tween, writeKeys } from "./motion.js";
+import { exportProject, rasterize, renderSvg } from "./preview.js";
+import {
+	addBone,
+	addConstraint,
+	assertUnlocked,
+	describe,
+	generateMesh,
+	importImages,
+	removeBone,
+	removeConstraint,
+	updateAttachment,
+	updateBone,
+	updateSlot,
+} from "./rig.js";
+import { load, validate } from "./runtime.js";
+import type { ConstraintJson } from "./types.js";
+import { checkName, UserError, Workspace } from "./workspace.js";
+
+const INSTRUCTIONS = `rydspine builds Spine 4.3 rigs and animations as files.
+Workflow: project_create -> image_import (place each part at its world position) -> bone_add (joints, world space)
+-> slot_update (bind parts to bones, keepWorld) -> mesh_generate / constraint_add where parts bend or follow
+-> anim_create + anim_oscillate / anim_tween / anim_bounce / anim_set_keys -> validate -> preview -> export.
+Coordinates: world space is y-up, units are pixels, rotations are degrees counter-clockwise.
+Animation values are offsets from the setup pose (scalex/scaley are multipliers).
+Every edit is a new version; history_revert undoes. Look at preview images before reporting success.`;
+
+type Result = CallToolResult;
+const text = (s: string): Result => ({ content: [{ type: "text", text: s }] });
+
+async function run(fn: () => Promise<Result> | Result): Promise<Result> {
+	try {
+		return await fn();
+	} catch (e) {
+		const msg = e instanceof UserError ? e.message : `internal error: ${(e as Error).stack ?? e}`;
+		return { isError: true, content: [{ type: "text", text: msg }] };
+	}
+}
+
+/** Applies an edit, verifies the runtime still loads the skeleton, then commits it. */
+function edit(project: string, message: string, fn: (ws: Workspace) => string | void): Promise<Result> {
+	return run(() => {
+		const ws = Workspace.open(project);
+		const out = fn(ws);
+		load(ws);
+		const version = ws.commit(message);
+		return text(`${out ? `${out}\n` : ""}saved as version ${version}`);
+	});
+}
+
+const project = z.string().describe("Project name");
+const space = z.enum(["local", "world"]).optional().describe("Coordinate space for x/y/rotation (default local)");
+const property = z.enum(PROPERTIES);
+const chain = {
+	bones: z.array(z.string()).min(1).describe("Bones to animate; for a chain, list root to tip"),
+	delayPerBone: z.number().optional().describe("Seconds each bone lags the previous one (follow-through)"),
+	falloff: z.number().optional().describe("Amplitude multiplier per bone down the chain, e.g. 1.2 grows toward the tip"),
+};
+
+export function createServer(): McpServer {
+	const server = new McpServer({ name: "rydspine", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+
+	server.registerTool(
+		"project_create",
+		{ description: "Create a new empty project (root bone only).", inputSchema: { name: z.string() } },
+		({ name }) => run(() => text(`created project ${Workspace.create(name).meta.name}`)),
+	);
+
+	server.registerTool("project_list", { description: "List projects." }, () =>
+		run(() => text(Workspace.list().join("\n") || "no projects")),
+	);
+
+	server.registerTool(
+		"project_status",
+		{ description: "Show the rig as text: bone tree, slots, constraints, animations, images.", inputSchema: { project } },
+		({ project }) => run(() => text(describe(Workspace.open(project)))),
+	);
+
+	server.registerTool(
+		"image_import",
+		{
+			description:
+				"Import PNG parts. Each becomes a slot with the same name showing the image centered at world (x, y). " +
+				"Import back-to-front: later images draw on top.",
+			inputSchema: {
+				project,
+				images: z.array(
+					z.object({
+						path: z.string().describe("Path to a PNG file"),
+						name: z.string().optional().describe("Slot/image name (default: file name)"),
+						x: z.number().optional(),
+						y: z.number().optional(),
+						bone: z.string().optional().describe("Bone to attach to (default root)"),
+					}),
+				),
+			},
+		},
+		({ project, images }) =>
+			edit(project, `import ${images.length} image(s)`, (ws) =>
+				importImages(ws, images)
+					.map((i) => `${i.slot}: ${i.width}x${i.height}`)
+					.join("\n"),
+			),
+	);
+
+	server.registerTool(
+		"image_view",
+		{ description: "Return an imported image so you can look at it.", inputSchema: { project, image: z.string() } },
+		({ project, image }) =>
+			run(() => {
+				const ws = Workspace.open(project);
+				const data = readFileSync(join(ws.imagesDir, `${checkName("image", image)}.png`)).toString("base64");
+				return { content: [{ type: "image", data, mimeType: "image/png" }] };
+			}),
+	);
+
+	const boneShape = {
+		parent: z.string().optional().describe("Parent bone (default root)"),
+		x: z.number().optional(),
+		y: z.number().optional(),
+		rotation: z.number().optional(),
+		length: z.number().optional(),
+		scaleX: z.number().optional(),
+		scaleY: z.number().optional(),
+		color: z.string().optional().describe("RRGGBBAA"),
+		space,
+	};
+
+	server.registerTool(
+		"bone_add",
+		{
+			description: "Add bones, in order (parents first). With space=world, x/y/rotation are world values (e.g. joint positions on the art).",
+			inputSchema: { project, bones: z.array(z.object({ name: z.string(), ...boneShape })).min(1) },
+		},
+		({ project, bones }) =>
+			edit(project, `add bones ${bones.map((b) => b.name).join(", ")}`, (ws) => {
+				for (const b of bones) addBone(ws, b);
+			}),
+	);
+
+	server.registerTool(
+		"bone_update",
+		{
+			description: "Move, reparent (keeps world position), rename or resize a bone.",
+			inputSchema: { project, name: z.string(), rename: z.string().optional(), ...boneShape },
+		},
+		(args) => edit(args.project, `update bone ${args.name}`, (ws) => void updateBone(ws, args)),
+	);
+
+	server.registerTool(
+		"bone_remove",
+		{ description: "Remove an unused bone.", inputSchema: { project, name: z.string() } },
+		({ project, name }) => edit(project, `remove bone ${name}`, (ws) => removeBone(ws, name)),
+	);
+
+	server.registerTool(
+		"slot_update",
+		{
+			description:
+				"Bind a slot to a bone (keepWorld keeps the art where it is, default true), change the visible attachment, " +
+				"color, blend mode, or draw order (0 = back).",
+			inputSchema: {
+				project,
+				name: z.string(),
+				bone: z.string().optional(),
+				keepWorld: z.boolean().optional(),
+				attachment: z.string().nullable().optional(),
+				color: z.string().optional(),
+				blend: z.enum(["normal", "additive", "multiply", "screen"]).optional(),
+				drawOrder: z.number().int().optional(),
+			},
+		},
+		(args) => edit(args.project, `update slot ${args.name}`, (ws) => void updateSlot(ws, args)),
+	);
+
+	server.registerTool(
+		"attachment_update",
+		{
+			description: "Move, rotate or scale a region attachment inside its slot.",
+			inputSchema: {
+				project,
+				slot: z.string(),
+				attachment: z.string().optional(),
+				x: z.number().optional(),
+				y: z.number().optional(),
+				rotation: z.number().optional(),
+				scaleX: z.number().optional(),
+				scaleY: z.number().optional(),
+				space,
+			},
+		},
+		(args) => edit(args.project, `update attachment in ${args.slot}`, (ws) => void updateAttachment(ws, args)),
+	);
+
+	server.registerTool(
+		"mesh_generate",
+		{
+			description:
+				"Turn a region attachment into a grid mesh so it can bend. Give bones to weight it automatically " +
+				"(by distance to each bone; bind the slot and place bones first).",
+			inputSchema: {
+				project,
+				slot: z.string(),
+				attachment: z.string().optional(),
+				cols: z.number().int().min(1).max(32),
+				rows: z.number().int().min(1).max(32),
+				bones: z.array(z.string()).optional(),
+				maxInfluences: z.number().int().min(1).max(4).optional(),
+			},
+		},
+		(args) =>
+			edit(args.project, `mesh ${args.slot}`, (ws) => {
+				const r = generateMesh(ws, args);
+				return `${r.vertices} vertices, ${r.triangles} triangles${args.bones ? `, weighted to ${args.bones.join(", ")}` : ""}`;
+			}),
+	);
+
+	const mix = z.number().min(0).max(1).optional();
+	const constraint = z.discriminatedUnion("type", [
+		z
+			.object({
+				type: z.literal("ik"),
+				name: z.string(),
+				bones: z.array(z.string()).min(1).max(2).describe("1 bone, or parent and child"),
+				target: z.string(),
+				bendPositive: z.boolean().optional(),
+				mix,
+				softness: z.number().optional(),
+				stretch: z.boolean().optional(),
+				compress: z.boolean().optional(),
+			})
+			.loose(),
+		z
+			.object({
+				type: z.literal("transform"),
+				name: z.string(),
+				bones: z.array(z.string()).min(1),
+				source: z.string(),
+			})
+			.loose()
+			.describe("Spine 4.3 transform constraint; extra fields are passed through to the JSON"),
+		z
+			.object({
+				type: z.literal("physics"),
+				name: z.string(),
+				bone: z.string(),
+				x: z.number().optional(),
+				y: z.number().optional(),
+				rotate: z.number().optional(),
+				scaleX: z.number().optional(),
+				shearX: z.number().optional(),
+				inertia: z.number().optional(),
+				strength: z.number().optional(),
+				damping: z.number().optional(),
+				mass: z.number().optional(),
+				wind: z.number().optional(),
+				gravity: z.number().optional(),
+				mix,
+			})
+			.loose()
+			.describe("Secondary motion (hair, tails, antennae): set rotate to 1 for rotational follow"),
+	]);
+
+	server.registerTool(
+		"constraint_add",
+		{ description: "Add an IK, transform or physics constraint.", inputSchema: { project, constraint } },
+		({ project, constraint }) =>
+			edit(project, `add ${constraint.type} ${constraint.name}`, (ws) => void addConstraint(ws, constraint as ConstraintJson)),
+	);
+
+	server.registerTool(
+		"constraint_remove",
+		{ description: "Remove a constraint.", inputSchema: { project, name: z.string() } },
+		({ project, name }) => edit(project, `remove constraint ${name}`, (ws) => removeConstraint(ws, name)),
+	);
+
+	server.registerTool(
+		"anim_create",
+		{
+			description: "Create an empty animation (replaces nothing if it exists).",
+			inputSchema: { project, name: z.string(), loop: z.boolean().describe("Loops seamlessly when played") },
+		},
+		({ project, name, loop }) =>
+			edit(project, `create animation ${name}`, (ws) => {
+				checkName("animation", name);
+				if (ws.doc.animations[name]) throw new UserError(`animation "${name}" already exists`);
+				ws.doc.animations[name] = {};
+				ws.meta.loops[name] = loop;
+			}),
+	);
+
+	server.registerTool(
+		"anim_remove",
+		{ description: "Delete an animation.", inputSchema: { project, name: z.string() } },
+		({ project, name }) =>
+			edit(project, `remove animation ${name}`, (ws) => {
+				assertUnlocked(ws, "animations", [name]);
+				if (!ws.doc.animations[name]) throw new UserError(`animation "${name}" not found`);
+				delete ws.doc.animations[name];
+				delete ws.meta.loops[name];
+			}),
+	);
+
+	server.registerTool(
+		"anim_set_keys",
+		{
+			description:
+				"Set explicit keys on one bone property. Replaces existing keys between the first and last given time " +
+				"(or `range`), keeping the rest. ease applies to the segment after each key.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				bone: z.string(),
+				property,
+				keys: z.array(z.object({ time: z.number().min(0), value: z.number(), ease: z.enum(EASES).optional() })).min(1),
+				range: z.tuple([z.number(), z.number()]).optional(),
+			},
+		},
+		(a) =>
+			edit(a.project, `keys ${a.animation} ${a.bone}.${a.property}`, (ws) =>
+				writeKeys(ws, a.animation, a.bone, a.property, a.keys, a.range),
+			),
+	);
+
+	server.registerTool(
+		"anim_oscillate",
+		{
+			description:
+				"Smooth back-and-forth motion (flap, sway, breathe, bob, wag). Use delayPerBone on a chain for " +
+				"follow-through (tails, necks, branches). In loop animations the period is fitted to whole cycles.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				property,
+				amplitude: z.number(),
+				period: z.number().positive().describe("Seconds per cycle"),
+				start: z.number().min(0).optional(),
+				end: z.number().optional().describe("Default: animation length, or one period"),
+				phase: z.number().optional().describe("Starting phase in cycles (0..1)"),
+				center: z.number().optional(),
+				...chain,
+			},
+		},
+		(a) => edit(a.project, `oscillate ${a.bones.join(",")}.${a.property}`, (ws) => oscillate(ws, a)),
+	);
+
+	server.registerTool(
+		"anim_tween",
+		{
+			description:
+				"Move a property from one value to another (open, turn, lean, spin: rotate to -360 for a full turn). " +
+				"anticipation winds up the opposite way first (0.1-0.3).",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				property,
+				to: z.number(),
+				from: z.number().optional(),
+				start: z.number().min(0).optional(),
+				duration: z.number().positive(),
+				ease: z.enum(EASES).optional(),
+				anticipation: z.number().min(0).max(1).optional(),
+				...chain,
+			},
+		},
+		(a) => edit(a.project, `tween ${a.bones.join(",")}.${a.property}`, (ws) => tween(ws, a)),
+	);
+
+	server.registerTool(
+		"anim_bounce",
+		{
+			description:
+				"Settle onto a value with bounces. style=spring overshoots and wobbles (logo pop, landing squash); " +
+				"style=drop lands and rebounds (lid slamming, object dropping).",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				property,
+				from: z.number(),
+				to: z.number(),
+				start: z.number().min(0).optional(),
+				duration: z.number().positive(),
+				bounces: z.number().int().min(0).max(6).optional(),
+				height: z.number().min(0).max(2).optional(),
+				decay: z.number().min(0).max(1).optional(),
+				style: z.enum(["spring", "drop"]).optional(),
+				...chain,
+			},
+		},
+		(a) => edit(a.project, `bounce ${a.bones.join(",")}.${a.property}`, (ws) => bounce(ws, a)),
+	);
+
+	server.registerTool(
+		"validate",
+		{
+			description: "Check the project with the Spine 4.3 runtime: references, images, weights, NaNs, loop seams, IK reach.",
+			inputSchema: { project },
+		},
+		({ project }) =>
+			run(() => {
+				const r = validate(Workspace.open(project));
+				const lines = [
+					r.ok ? "OK" : "FAILED",
+					...r.errors.map((e) => `error: ${e}`),
+					...r.warnings.map((w) => `warning: ${w}`),
+					...r.info,
+				];
+				return { isError: !r.ok, content: [{ type: "text", text: lines.join("\n") }] };
+			}),
+	);
+
+	server.registerTool(
+		"preview",
+		{
+			description:
+				"Render frames of an animation (or the setup pose) side by side with bones overlaid, as an image. " +
+				"Frames are played with physics, as the runtime would.",
+			inputSchema: {
+				project,
+				animation: z.string().optional(),
+				frames: z.number().int().min(1).max(24).optional(),
+				times: z.array(z.number().min(0)).max(24).optional(),
+				showBones: z.boolean().optional(),
+			},
+		},
+		({ project, ...spec }) =>
+			run(async () => {
+				const ws = Workspace.open(project);
+				const svg = renderSvg(ws, spec);
+				const dir = join(ws.dir, "previews");
+				mkdirSync(dir, { recursive: true });
+				const base = join(dir, `v${ws.meta.version}-${spec.animation ?? "setup"}`);
+				writeFileSync(`${base}.svg`, svg);
+				const png = await rasterize(svg);
+				if (!png) return text(`Playwright is not available; SVG saved to ${base}.svg`);
+				writeFileSync(`${base}.png`, png);
+				return {
+					content: [
+						{ type: "image", data: png.toString("base64"), mimeType: "image/png" },
+						{ type: "text", text: `saved ${base}.png` },
+					],
+				};
+			}),
+	);
+
+	server.registerTool(
+		"export",
+		{
+			description:
+				"Export skeleton JSON, atlas and PNG for Spine 4.3 runtimes, plus an HTML player page. " +
+				"Spine Editor users can open the JSON with File > Import Data to get a .spine project.",
+			inputSchema: { project, outDir: z.string().optional().describe("Default: <project>/export") },
+		},
+		({ project, outDir }) =>
+			run(() => {
+				const ws = Workspace.open(project);
+				const report = validate(ws);
+				if (!report.ok) throw new UserError(`fix validation errors first:\n${report.errors.join("\n")}`);
+				const { dir, files } = exportProject(ws, outDir);
+				return text(`exported to ${dir}:\n${files.join("\n")}`);
+			}),
+	);
+
+	server.registerTool(
+		"history_list",
+		{ description: "List saved versions.", inputSchema: { project } },
+		({ project }) =>
+			run(() =>
+				text(
+					Workspace.open(project)
+						.history()
+						.map((h) => `v${h.version}  ${h.time}  ${h.message}`)
+						.join("\n"),
+				),
+			),
+	);
+
+	server.registerTool(
+		"history_revert",
+		{ description: "Restore an earlier version (saved as a new version, so it can be undone too).", inputSchema: { project, version: z.number().int() } },
+		({ project, version }) => run(() => text(`reverted; now version ${Workspace.open(project).revert(version)}`)),
+	);
+
+	server.registerTool(
+		"lock_set",
+		{
+			description: "Lock or unlock approved bones, slots or animations so later edits cannot change them.",
+			inputSchema: { project, kind: z.enum(["bones", "slots", "animations"]), names: z.array(z.string()).min(1), locked: z.boolean() },
+		},
+		({ project, kind, names, locked }) =>
+			edit(project, `${locked ? "lock" : "unlock"} ${kind} ${names.join(", ")}`, (ws) => {
+				const set = new Set(ws.meta.locks[kind]);
+				for (const n of names) locked ? set.add(n) : set.delete(n);
+				ws.meta.locks[kind] = [...set].sort();
+			}),
+	);
+
+	return server;
+}

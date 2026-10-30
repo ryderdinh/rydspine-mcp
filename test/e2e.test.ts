@@ -1,0 +1,208 @@
+// Drives the server through a real MCP client, building a small creature end to end.
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { RegionAttachment } from "@esotericsoftware/spine-core";
+import { load, poseAt } from "../src/runtime.js";
+import { createServer } from "../src/server.js";
+import { Workspace } from "../src/workspace.js";
+
+const IMAGES = resolve("spike/fixtures/swing/images");
+let client: Client;
+let root: string;
+
+type Content = { type: string; text?: string; data?: string };
+async function call(name: string, args: Record<string, unknown> = {}) {
+	const r = (await client.callTool({ name, arguments: args })) as { isError?: boolean; content: Content[] };
+	const text = r.content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+	return { ...r, text };
+}
+async function ok(name: string, args: Record<string, unknown> = {}) {
+	const r = await call(name, args);
+	if (r.isError) throw new Error(`${name} failed: ${r.text}`);
+	return r;
+}
+
+beforeAll(async () => {
+	root = mkdtempSync(join(tmpdir(), "rydspine-"));
+	process.env.RYDSPINE_WORKSPACES = root;
+	const [a, b] = InMemoryTransport.createLinkedPair();
+	await createServer().connect(a);
+	client = new Client({ name: "test", version: "0" });
+	await client.connect(b);
+});
+
+afterAll(() => {
+	if (!process.env.KEEP_WORKSPACES) rmSync(root, { recursive: true, force: true });
+});
+
+const project = "critter";
+
+/** World corners of every region attachment in the setup pose. */
+function regionCorners(): Record<string, number[]> {
+	const { skeleton } = load(Workspace.open(project));
+	const out: Record<string, number[]> = {};
+	for (const slot of skeleton.slots) {
+		const att = slot.appliedPose.getAttachment();
+		if (!(att instanceof RegionAttachment)) continue;
+		const v = new Array<number>(8);
+		att.computeWorldVertices(slot, att.getOffsets(slot.appliedPose), v, 0, 2);
+		out[slot.data.name] = v;
+	}
+	return out;
+}
+
+describe("rydspine end to end", () => {
+	it("lists its tools", async () => {
+		const { tools } = await client.listTools();
+		expect(tools.map((t) => t.name)).toEqual(
+			expect.arrayContaining(["project_create", "bone_add", "anim_oscillate", "validate", "preview", "export"]),
+		);
+	});
+
+	it("builds a rig from parts placed in world space", async () => {
+		await ok("project_create", { name: project });
+		await ok("image_import", {
+			project,
+			images: [
+				{ path: join(IMAGES, "flag.png"), name: "tail", x: -40, y: 120 },
+				{ path: join(IMAGES, "body.png"), x: 0, y: 100 },
+				{ path: join(IMAGES, "arm1.png"), name: "upper", x: 40, y: 150 },
+				{ path: join(IMAGES, "arm2.png"), name: "lower", x: 80, y: 150 },
+			],
+		});
+		await ok("bone_add", {
+			project,
+			bones: [
+				{ name: "body", x: 0, y: 50, rotation: 90, length: 100, space: "world" },
+				{ name: "upper", parent: "body", x: 20, y: 150, rotation: 0, length: 40, space: "world" },
+				{ name: "lower", parent: "upper", x: 60, y: 150, rotation: 0, length: 40, space: "world" },
+				{ name: "target", x: 95, y: 140, space: "world" },
+				{ name: "tail1", parent: "body", x: -20, y: 120, rotation: 180, length: 20, space: "world" },
+				{ name: "tail2", parent: "tail1", x: -40, y: 120, rotation: 180, length: 20, space: "world" },
+			],
+		});
+		const before = regionCorners();
+		for (const [slot, bone] of [["body", "body"], ["upper", "upper"], ["lower", "lower"], ["tail", "tail1"]])
+			await ok("slot_update", { project, name: slot, bone });
+		// Binding with keepWorld must not move any art.
+		const after = regionCorners();
+		for (const [slot, corners] of Object.entries(before))
+			corners.forEach((n, i) => expect(after[slot][i]).toBeCloseTo(n, 1));
+
+		const mesh = await ok("mesh_generate", { project, slot: "tail", cols: 4, rows: 2, bones: ["tail1", "tail2"] });
+		expect(mesh.text).toMatch(/15 vertices, 16 triangles/);
+		await ok("constraint_add", { project, constraint: { type: "ik", name: "arm-ik", bones: ["upper", "lower"], target: "target" } });
+		await ok("constraint_add", {
+			project,
+			constraint: { type: "physics", name: "tail-physics", bone: "tail2", rotate: 1, inertia: 0.6, damping: 0.8 },
+		});
+		const status = await ok("project_status", { project });
+		expect(status.text).toContain("tail -> bone tail1");
+		expect(status.text).toContain("ik arm-ik");
+	});
+
+	it("rejects bad edits without saving them", async () => {
+		const versions = (await ok("history_list", { project })).text.split("\n").length;
+		const bad = await call("constraint_add", {
+			project,
+			constraint: { type: "ik", name: "bad", bones: ["upper", "tail1"], target: "target" },
+		});
+		expect(bad.isError).toBe(true);
+		expect(bad.text).toMatch(/not a child/);
+		const cycle = await call("bone_update", { project, name: "body", parent: "tail2" });
+		expect(cycle.isError).toBe(true);
+		expect((await ok("history_list", { project })).text.split("\n").length).toBe(versions);
+	});
+
+	it("animates a seamless loop with follow-through", async () => {
+		await ok("anim_create", { project, name: "idle", loop: true });
+		await ok("anim_oscillate", { project, animation: "idle", bones: ["body"], property: "rotate", amplitude: 6, period: 2, end: 2 });
+		const fitted = await ok("anim_oscillate", {
+			project,
+			animation: "idle",
+			bones: ["tail1", "tail2"],
+			property: "rotate",
+			amplitude: 15,
+			period: 0.9,
+			end: 2,
+			delayPerBone: 0.12,
+			falloff: 1.4,
+		});
+		expect(fitted.text).toMatch(/period adjusted 0.9s -> 1s/);
+		await ok("anim_oscillate", { project, animation: "idle", bones: ["target"], property: "translatey", amplitude: 5, period: 1, end: 2 });
+		const v = await ok("validate", { project });
+		expect(v.text).toMatch(/^OK/);
+		expect(v.text).toMatch(/idle: 2\.000s, loop seam 0\.0\d\dpx/);
+	});
+
+	it("animates one-shot moves: anticipation, spring and drop", async () => {
+		await ok("anim_create", { project, name: "pop", loop: false });
+		await ok("anim_tween", { project, animation: "pop", bones: ["upper"], property: "rotate", to: 40, duration: 0.5, anticipation: 0.2 });
+		await ok("anim_bounce", { project, animation: "pop", bones: ["body"], property: "scaley", from: 0.6, to: 1, duration: 0.8, style: "spring" });
+		await ok("anim_bounce", { project, animation: "pop", bones: ["target"], property: "translatey", from: 40, to: 0, start: 0.5, duration: 0.7, style: "drop" });
+		const v = await ok("validate", { project });
+		expect(v.text).toMatch(/^OK/);
+		// IK overrides the arm's own keys: the arm tip stays on the (reachable) target.
+		const loaded = load(Workspace.open(project));
+		poseAt(loaded, "pop", 0.3);
+		const lower = loaded.skeleton.findBone("lower")!.appliedPose;
+		const target = loaded.skeleton.findBone("target")!.appliedPose;
+		expect(Math.hypot(lower.worldX + lower.a * 40 - target.worldX, lower.worldY + lower.c * 40 - target.worldY)).toBeLessThan(1);
+		const shot = await ok("preview", { project, animation: "pop", frames: 6 });
+		expect(shot.content.some((c) => c.type === "image")).toBe(true);
+	});
+
+	it("catches a loop that does not close", async () => {
+		await ok("anim_create", { project, name: "broken", loop: true });
+		await ok("anim_set_keys", {
+			project,
+			animation: "broken",
+			bone: "body",
+			property: "rotate",
+			keys: [{ time: 0, value: 0, ease: "ease-in-out" }, { time: 1, value: 20 }],
+		});
+		const v = await call("validate", { project });
+		expect(v.isError).toBe(true);
+		expect(v.text).toMatch(/broken: loop seam jumps/);
+		await ok("anim_remove", { project, name: "broken" });
+	});
+
+	it("respects locks and can revert", async () => {
+		await ok("lock_set", { project, kind: "animations", names: ["idle"], locked: true });
+		const locked = await call("anim_tween", { project, animation: "idle", bones: ["body"], property: "rotate", to: 90, duration: 1 });
+		expect(locked.isError).toBe(true);
+		expect(locked.text).toMatch(/locked animations: idle/);
+
+		const history = (await ok("history_list", { project })).text.split("\n");
+		const before = Number(history[history.length - 1].match(/^v(\d+)/)![1]);
+		await ok("bone_remove", { project, name: "target" }).catch(() => {});
+		await ok("bone_update", { project, name: "body", length: 10 });
+		await ok("history_revert", { project, version: before });
+		expect((await ok("project_status", { project })).text).toContain("len=100");
+	});
+
+	it("exports runtime files and a working player page", async () => {
+		const r = await ok("export", { project });
+		const dir = join(root, project, "export");
+		for (const f of ["critter.json", "critter.atlas", "critter.png", "critter.html"]) expect(existsSync(join(dir, f))).toBe(true);
+		const json = JSON.parse(readFileSync(join(dir, "critter.json"), "utf8"));
+		expect(json.skeleton.spine).toBe("4.3");
+		expect(r.text).toContain("exported");
+
+		const { chromium } = createRequire(import.meta.url)("playwright");
+		const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
+		try {
+			const page = await browser.newPage();
+			await page.goto(`file://${join(dir, "critter.html")}`);
+			await page.waitForFunction(() => (window as any).playerReady || (window as any).playerError, null, { timeout: 15000 });
+			expect(await page.evaluate(() => (window as any).playerError ?? null)).toBeNull();
+		} finally {
+			await browser.close();
+		}
+	}, 30000);
+});

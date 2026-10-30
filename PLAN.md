@@ -131,7 +131,16 @@ Ngoài kiểm tra tự động, mỗi mẫu cần người duyệt bằng mắt 
 - **Chất lượng tự động:** pivot và weights tự động có thể sai với asset lạ. Giảm thiểu bằng bước duyệt kết quả phân tích, `pose_test` và chỉnh tay qua tool.
 - **Chất lượng chuyển động chủ quan:** cần mẫu tham chiếu và ngưỡng cụ thể trước nghiệm thu.
 
-## 11. Cần người dùng xác nhận trước giai đoạn 1
+## 11. Bảo mật thông tin
+
+- **License Spine:** không đưa key vào chat, repo, log hay file cấu hình được commit. Key chỉ dùng để kích hoạt Spine Editor trên máy người dùng. Server gọi Spine CLI đã kích hoạt sẵn và không đọc hay lưu key.
+- **Secret khác** (nếu có): chỉ đọc từ biến môi trường hoặc file `.env` cục bộ (đã nằm trong `.gitignore`). Repo chỉ giữ `.env.example` không chứa giá trị thật.
+- **Asset của người dùng** (PSD, PNG, project): nằm trong thư mục workspace cục bộ, không commit. Bộ nghiệm thu chỉ dùng asset mẫu được phép công khai trong repo.
+- **Chạy cục bộ:** MCP server chạy qua stdio trên máy người dùng và không mở cổng mạng. Server không gửi dữ liệu ra ngoài; phần ảnh LLM nhìn thấy chỉ là ảnh mà client tự yêu cầu qua tool.
+- **Log và báo cáo:** không ghi đường dẫn tuyệt đối nhạy cảm hay nội dung secret; xóa thông tin môi trường khỏi báo cáo lỗi.
+- **Repo:** để ở chế độ private. Trước mỗi lần push, kiểm tra không có secret (bật secret scanning của GitHub).
+
+## 12. Cần người dùng xác nhận trước giai đoạn 1
 
 1. Phạm vi v1 ở mục 1 (đặc biệt: loại ảnh phẳng ra khỏi v1).
 2. ~~Có license Spine không?~~ Đã có. Còn cần xác nhận: bản Essential hay Professional, phiên bản 4.3.x cụ thể, và hệ điều hành của máy chạy server.

@@ -1,0 +1,19 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+spine-license*
+license*.txt
+
+# Customer assets and workspaces (kept local)
+workspaces/
+assets/private/
+*.psd
+
+# Build / deps
+node_modules/
+dist/
+coverage/
+*.log

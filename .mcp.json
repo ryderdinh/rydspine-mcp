@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "rydspine": {
+      "command": "npx",
+      "args": ["tsx", "src/index.ts"],
+      "env": { "RYDSPINE_WORKSPACES": "workspaces" }
+    }
+  }
+}

@@ -1,0 +1,143 @@
+// A project workspace on disk: the current skeleton, its images, metadata and a snapshot per change.
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { emptySkeleton, type ProjectMeta, type SkeletonDoc } from "./types.js";
+
+const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+export class UserError extends Error {}
+
+export function workspacesRoot(): string {
+	return resolve(process.env.RYDSPINE_WORKSPACES ?? "workspaces");
+}
+
+export function checkName(kind: string, name: string): string {
+	if (!NAME.test(name)) throw new UserError(`${kind} name "${name}" must match ${NAME}`);
+	return name;
+}
+
+/** Image names may contain folders ("arm/upper"), as Spine attachment paths do. */
+export function checkImagePath(name: string): string {
+	const parts = name.split("/");
+	if (!parts.every((p) => /^[A-Za-z0-9 _.-]+$/.test(p) && p !== "." && p !== ".."))
+		throw new UserError(`image name "${name}" may only use letters, digits, space, _ . - and / between folders`);
+	return name;
+}
+
+function listPngs(dir: string): string[] {
+	if (!existsSync(dir)) return [];
+	return readdirSync(dir, { recursive: true, encoding: "utf8" })
+		.filter((f) => f.toLowerCase().endsWith(".png"))
+		.map((f) => f.split("\\").join("/"));
+}
+
+interface Snapshot {
+	version: number;
+	message: string;
+	time: string;
+	doc: SkeletonDoc;
+	meta: ProjectMeta;
+}
+
+export class Workspace {
+	readonly dir: string;
+	doc: SkeletonDoc;
+	meta: ProjectMeta;
+
+	private constructor(dir: string, doc: SkeletonDoc, meta: ProjectMeta) {
+		this.dir = dir;
+		this.doc = doc;
+		this.meta = meta;
+	}
+
+	/** Creates the project directory. Call commit() once the initial state is in place. */
+	static create(name: string, doc: SkeletonDoc = emptySkeleton()): Workspace {
+		const dir = join(workspacesRoot(), checkName("project", name));
+		if (existsSync(dir)) throw new UserError(`project "${name}" already exists`);
+		mkdirSync(join(dir, "images"), { recursive: true });
+		mkdirSync(join(dir, "history"), { recursive: true });
+		const meta: ProjectMeta = { name, version: 0, loops: {}, locks: { bones: [], slots: [], animations: [] } };
+		return new Workspace(dir, doc, meta);
+	}
+
+	static open(name: string): Workspace {
+		const dir = join(workspacesRoot(), checkName("project", name));
+		if (!existsSync(join(dir, "skeleton.json"))) throw new UserError(`project "${name}" not found`);
+		const doc = JSON.parse(readFileSync(join(dir, "skeleton.json"), "utf8")) as SkeletonDoc;
+		const meta = JSON.parse(readFileSync(join(dir, "project.json"), "utf8")) as ProjectMeta;
+		return new Workspace(dir, doc, meta);
+	}
+
+	static list(): string[] {
+		const root = workspacesRoot();
+		if (!existsSync(root)) return [];
+		return readdirSync(root).filter((d) => existsSync(join(root, d, "skeleton.json")));
+	}
+
+	get imagesDir(): string {
+		return join(this.dir, "images");
+	}
+
+	imageNames(): string[] {
+		return listPngs(this.imagesDir)
+			.map((f) => f.slice(0, -4))
+			.sort();
+	}
+
+	imagePath(name: string): string {
+		return join(this.imagesDir, `${checkImagePath(name)}.png`);
+	}
+
+	addImage(source: string, name?: string): string {
+		const imageName = checkImagePath(name ?? basename(source).replace(/\.png$/i, ""));
+		mkdirSync(dirname(this.imagePath(imageName)), { recursive: true });
+		copyFileSync(source, this.imagePath(imageName));
+		return imageName;
+	}
+
+	/** Copies every PNG under dir, keeping sub-folders as part of the image name. */
+	addImageDir(dir: string): string[] {
+		return listPngs(dir).map((f) => this.addImage(join(dir, f), f.slice(0, -4)));
+	}
+
+	/** Saves the current state as a new version. */
+	commit(message: string): number {
+		this.meta.version++;
+		writeFileSync(join(this.dir, "skeleton.json"), `${JSON.stringify(this.doc, null, 2)}\n`);
+		writeFileSync(join(this.dir, "project.json"), `${JSON.stringify(this.meta, null, 2)}\n`);
+		const snap: Snapshot = {
+			version: this.meta.version,
+			message,
+			time: new Date().toISOString(),
+			doc: this.doc,
+			meta: this.meta,
+		};
+		writeFileSync(this.snapshotPath(this.meta.version), JSON.stringify(snap));
+		return this.meta.version;
+	}
+
+	history(): { version: number; message: string; time: string }[] {
+		return readdirSync(join(this.dir, "history"))
+			.filter((f) => f.endsWith(".json"))
+			.sort()
+			.map((f) => {
+				const s = JSON.parse(readFileSync(join(this.dir, "history", f), "utf8")) as Snapshot;
+				return { version: s.version, message: s.message, time: s.time };
+			});
+	}
+
+	/** Restores an earlier version as a new version, so the revert itself can be undone. */
+	revert(version: number): number {
+		const path = this.snapshotPath(version);
+		if (!existsSync(path)) throw new UserError(`version ${version} not found`);
+		const snap = JSON.parse(readFileSync(path, "utf8")) as Snapshot;
+		const current = this.meta.version;
+		this.doc = snap.doc;
+		this.meta = { ...snap.meta, version: current };
+		return this.commit(`revert to version ${version}`);
+	}
+
+	private snapshotPath(version: number): string {
+		return join(this.dir, "history", `${String(version).padStart(5, "0")}.json`);
+	}
+}

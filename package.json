@@ -5,15 +5,29 @@
   "description": "Spine 4.3 rigging and animation MCP",
   "type": "module",
   "scripts": {
-    "spike:check": "tsx spike/runtime-check.ts",
-    "typecheck": "tsc --noEmit"
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc",
+    "spike:check": "tsx spike/runtime-check.ts"
   },
   "dependencies": {
-    "@esotericsoftware/spine-core": "4.3.13"
+    "@esotericsoftware/spine-core": "4.3.13",
+    "@esotericsoftware/spine-player": "4.3.13",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "pngjs": "7.0.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "26.6.6",
+    "@types/pngjs": "6.0.5",
     "tsx": "4.23.15",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  },
+  "bin": {
+    "rydspine-mcp": "src/index.ts"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

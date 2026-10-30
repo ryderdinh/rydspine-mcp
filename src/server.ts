@@ -23,12 +23,13 @@ import {
 	updateSlot,
 } from "./rig.js";
 import { load, validate } from "./runtime.js";
+import * as templates from "./templates.js";
 import type { ConstraintJson } from "./types.js";
 import { checkName, UserError, Workspace } from "./workspace.js";
 
 const INSTRUCTIONS = `rydspine builds Spine 4.3 rigs and animations as files.
 Existing Spine exports can be brought in with project_import and edited with the same tools.
-Workflow: project_create -> psd_import or image_import (place each part at its world position) -> bone_add (joints, world space)
+Workflow: project_create -> psd_import or image_import (place each part at its world position) -> rig_template (chain/hinge/wheel/limb/biped) or bone_add (joints, world space)
 -> slot_update (bind parts to bones, keepWorld) -> mesh_generate / constraint_add where parts bend or follow
 -> anim_create + anim_oscillate / anim_tween / anim_bounce / anim_set_keys -> validate -> preview -> export.
 Coordinates: world space is y-up, units are pixels, rotations are degrees counter-clockwise.
@@ -214,6 +215,101 @@ export function createServer(): McpServer {
 		"bone_remove",
 		{ description: "Remove an unused bone.", inputSchema: { project, name: z.string() } },
 		({ project, name }) => edit(project, `remove bone ${name}`, (ws) => removeBone(ws, name)),
+	);
+
+	const point = z.object({ x: z.number(), y: z.number() });
+	const template = z.discriminatedUnion("kind", [
+		z
+			.object({
+				kind: z.literal("chain"),
+				name: z.string().describe("Bone name prefix: tail -> tail1, tail2, ..."),
+				parent: z.string().optional(),
+				points: z.array(point).min(2).describe("Base to tip; with 2 points, segments splits the line"),
+				segments: z.number().int().min(1).max(20).optional(),
+				slots: z.array(z.string()).optional().describe("Parts to bind and mesh along the chain"),
+				physics: z.boolean().optional().describe("Add drag/settle physics to each bone"),
+			})
+			.describe("Tails, necks, tentacles, ropes, branches"),
+		z
+			.object({
+				kind: z.literal("hinge"),
+				name: z.string(),
+				parent: z.string().optional(),
+				pivot: point,
+				tip: point.optional(),
+				slots: z.array(z.string()).optional(),
+			})
+			.describe("Lids, doors, jaws, flaps"),
+		z
+			.object({
+				kind: z.literal("wheel"),
+				name: z.string(),
+				parent: z.string().optional(),
+				center: point,
+				radius: z.number().positive(),
+				slots: z.array(z.string()).optional(),
+			})
+			.describe("Wheels, gears, fans"),
+		z
+			.object({
+				kind: z.literal("limb"),
+				name: z.string(),
+				parent: z.string().optional(),
+				start: point.describe("Shoulder / hip"),
+				joint: point.describe("Elbow / knee, as drawn"),
+				end: point.describe("Wrist / ankle"),
+				upperSlots: z.array(z.string()).optional(),
+				lowerSlots: z.array(z.string()).optional(),
+				endSlots: z.array(z.string()).optional().describe("Hand / foot parts"),
+				targetParent: z.string().optional().describe("Owner of the IK target (default root: planted feet)"),
+			})
+			.describe("Arms and legs with IK"),
+		z
+			.object({
+				kind: z.literal("biped"),
+				hips: point,
+				chest: point,
+				neck: point,
+				head: point,
+				leftShoulder: point.optional(),
+				leftElbow: point.optional(),
+				leftHand: point.optional(),
+				rightShoulder: point.optional(),
+				rightElbow: point.optional(),
+				rightHand: point.optional(),
+				leftHip: point,
+				leftKnee: point,
+				leftFoot: point,
+				rightHip: point,
+				rightKnee: point,
+				rightFoot: point,
+				parts: z.record(z.string(), z.string()).optional().describe("slot -> bone"),
+			})
+			.describe("Two-legged character: hips, torso, neck, head, IK arms (left-arm-*) and legs (left-leg-*)"),
+	]);
+
+	server.registerTool(
+		"rig_template",
+		{
+			description:
+				"Build a common structure from a few world-space points (joints read off the art): chain, hinge, wheel, " +
+				"limb (2 bones + IK) or biped. Faster and more consistent than adding bones one by one.",
+			inputSchema: { project, template },
+		},
+		({ project, template }) =>
+			edit(project, `rig template ${template.kind}`, (ws) => {
+				const bones =
+					template.kind === "chain"
+						? templates.chain(ws, template)
+						: template.kind === "hinge"
+							? templates.hinge(ws, template)
+							: template.kind === "wheel"
+								? templates.wheel(ws, template)
+								: template.kind === "limb"
+									? templates.limb(ws, template)
+									: templates.biped(ws, template);
+				return `bones: ${bones.join(", ")}`;
+			}),
 	);
 
 	server.registerTool(

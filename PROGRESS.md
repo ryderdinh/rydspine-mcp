@@ -8,8 +8,8 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 |---|---|---|
 | 0. Spike & chốt | ✅ Xong (trừ Spine CLI) | Runtime 4.3 chạy headless. Bỏ Spine CLI khỏi v1 vì máy người dùng không được cài Spine |
 | 1. Lõi | ✅ Xong bản đầu | MCP server, workspace, lịch sử phiên bản, validate, export |
-| 2. Đầu vào | 🟡 Một phần | Có nhập bộ PNG và nhập project Spine 4.3 có sẵn (JSON + thư mục ảnh hoặc atlas). Chưa có PSD, chưa đọc file binary `.skel` |
-| 3. Rig | 🟡 Một phần | Có bones, slots, mesh lưới + auto weights, IK/transform/physics. Chưa có template rig, mesh theo viền ảnh, pose_test |
+| 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận) và project Spine 4.3 có sẵn. Chưa đọc file binary `.skel`; ảnh phẳng chưa tách bộ phận để sau v1 |
+| 3. Rig | 🟡 Gần xong | Có bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi, bản lề, bánh xe, chi IK, 2 chân). Chưa có pose_test, mẫu 4 chân, mẫu cánh |
 | 4. Animation | 🟡 Một phần | Có oscillate (kèm follow-through), tween (kèm anticipation), bounce, key tay. Chưa có walk/run cycle, chưa có slot/color timeline |
 | 5. Kiểm tra & preview | 🟡 Một phần | Có validate, preview ảnh nhiều khung (cả clipping và độ trong suốt), trang HTML player. Chưa có kiểm tra trượt chân / biến dạng |
 | 6. Chỉnh sửa | 🟡 Một phần | Có khóa, revert, sửa theo khoảng thời gian. Chưa có diff giữa các phiên bản, chưa nhập lại JSON sửa trong Spine |
@@ -58,9 +58,23 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
   - xuất ra rồi nhập lại thì animation gốc giữ nguyên.
 - Fixture coin ở `test/fixtures/coin/` kèm `license.txt`. Ảnh của Esoteric Software chỉ dùng phi thương mại.
 
+### 2026-10-30 (tiếp 2)
+- `psd_import`:
+  - mỗi layer có pixel thành một bộ phận, giữ vị trí, thứ tự, độ trong suốt và chế độ hòa trộn;
+  - layer ẩn được bỏ qua (hoặc nhập vào nhưng ẩn đi), tên layer trùng tự đánh số;
+  - đọc file 2 lượt để từ chối PSD hoặc layer quá lớn trước khi giải mã, giới hạn bộ nhớ 1 GB.
+- `mesh_generate` mặc định tạo mesh theo viền ảnh:
+  - dò viền alpha, rút gọn, nới viền 2px;
+  - thêm đỉnh bên trong, tam giác hóa Delaunay có ràng buộc để mọi tam giác nằm trong viền;
+  - test trên ảnh coin: mesh phủ trên 99,5% điểm ảnh đặc mà vẫn ôm sát.
+- `rig_template`: chuỗi đốt (kèm mesh và physics), bản lề, bánh xe, chi 2 đốt có IK, nhân vật 2 chân.
+- Lỗi test bắt được và đã sửa: IK gập ngược chiều so với hình vẽ. Giờ gối và khuỷu tay giữ đúng vị trí đã vẽ.
+- Test: 20 test đạt (e2e, mesh theo viền, mẫu rig).
+
 ## Việc tiếp theo
 
-1. Nhập PSD (`ag-psd`): mỗi layer thành một bộ phận, giữ đúng vị trí và thứ tự.
-2. Template rig cho các loại cấu trúc (2 chân, có cánh, chuỗi đốt, bản lề, có bánh) để giảm số bước.
-3. Mesh theo viền ảnh (alpha contour) thay cho lưới chữ nhật.
-4. Bộ nghiệm thu 6 asset theo `REQUIREMENTS.md` §5.
+1. Bộ nghiệm thu 6 asset (`REQUIREMENTS.md` §5): nhân vật chạy → dừng → vung kiếm, rồng vỗ cánh, cây trong gió, rương, xe, logo. Cần asset thật; tạm dùng asset tự vẽ đơn giản.
+2. Chu kỳ đi/chạy cho mẫu 2 chân, có kiểm tra trượt chân.
+3. Timeline cho slot (màu, độ trong suốt, đổi attachment) và draw order.
+4. Mẫu rig 4 chân và cánh.
+5. `history_diff` và nhập lại JSON đã sửa trong Spine.

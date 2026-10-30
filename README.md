@@ -27,11 +27,11 @@ Dự án được lưu trong `workspaces/` (đổi bằng biến `RYDSPINE_WORKS
 
 ## Quy trình
 
-1. `project_create`: tạo dự án.
-2. `image_import`: nhập các bộ phận PNG, đặt mỗi phần ở vị trí world của nó.
-3. `bone_add` (`space: "world"`): đặt xương tại các khớp trên hình.
+1. `project_create`: tạo dự án; hoặc `project_import` để mở project Spine 4.3 có sẵn.
+2. `psd_import` hoặc `image_import`: đưa các bộ phận vào, mỗi phần nằm đúng vị trí của nó.
+3. `rig_template` (chuỗi, bản lề, bánh xe, chi IK, nhân vật 2 chân) hoặc `bone_add` (`space: "world"`): đặt xương tại các khớp trên hình.
 4. `slot_update`: gắn bộ phận vào xương; hình giữ nguyên vị trí.
-5. `mesh_generate`, `constraint_add`: thêm phần uốn cong, IK, physics.
+5. `mesh_generate` (mặc định bám theo viền ảnh), `constraint_add`: thêm phần uốn cong, IK, physics.
 6. `anim_create`, rồi `anim_oscillate` / `anim_tween` / `anim_bounce` / `anim_set_keys`.
 7. `validate` → `preview` → `export`.
 

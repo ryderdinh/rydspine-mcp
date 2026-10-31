@@ -32,6 +32,7 @@ Dự án được lưu trong `workspaces/` (đổi bằng biến `RYDSPINE_WORKS
 3. `rig_template` (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân) hoặc `bone_add` (`space: "world"`): đặt xương tại các khớp trên hình.
 4. `slot_update`: gắn bộ phận vào xương; hình giữ nguyên vị trí.
 5. `mesh_generate` (mặc định bám theo viền ảnh), `constraint_add`: thêm phần uốn cong, IK, transform, physics, path (đưa các điểm trên hình, rydspine tự tạo đường cong; `pathBones` gắn đường cong vào vài xương điều khiển) và slider (phát animation theo một xương điều khiển). `shape_add`: điểm mốc cho game (`point`: nòng súng, tay cầm), vùng va chạm (`boundingbox`) hoặc mặt nạ (`clipping`), từ các điểm trên hình hoặc tự dò theo viền của một slot (`around`).
+6. `mirror_bones`: chép một bên rig sang bên kia (xương, slot, ảnh lật, IK, physics). `mirror_animation`: đổi animation sang bên kia (`swap` cho nhìn ngang, `mirror` phản chiếu cho nhìn thẳng).
 6. `skin_create` / `skin_variant` nếu cần nhiều bộ trang phục.
 7. `anim_create`, rồi `anim_oscillate` / `anim_tween` / `anim_bounce` / `anim_gait` / `anim_set_keys` / `anim_slot_keys`. Constraint thay đổi theo thời gian (vị trí trên path, gió physics, mix, time của slider): `anim_constraint_keys`. Hiệu ứng nhiều frame (lửa, lấp lánh): `sequence_import` rồi `anim_sequence_keys`. Event cho game (bước chân, va chạm, âm thanh): `event_define` và `anim_event_keys`. Đổi lớp trước/sau giữa animation: `anim_draw_order_keys`. Mọi `ease` nhận preset hoặc bezier kiểu CSS `[x1, y1, x2, y2]`.
 8. `validate`, `motion_check` → `preview` → `export`.

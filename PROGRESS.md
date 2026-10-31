@@ -177,7 +177,13 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Asset `chest`: nắp bật bằng bezier tự đưa, quầng sáng vẽ đè lên nắp khi mở, event `creak` (audio) và `sparkle`.
 - Test: 41 test đạt. `spine:check` 7/7: event của chest (3) và bước chân của hero (2 và 4) khớp sau khi qua Spine, thứ tự vẽ khớp mọi frame, lệch ≤ 0,0011.
 
-### 2026-10-31 (tiếp 7)
+### 2026-10-31 (tiếp 8)
+
+- `mirror_bones`: chép một bên rig (xương con, slot, attachment region/mesh/path/box/clip/point, IK đảo bendPositive, physics) qua đường gương dọc; tên đổi bên (left↔right, l↔r, camelCase, `sides` tuỳ chọn).
+- `mirror_animation`: `swap` đổi timeline trái/phải giữ giá trị; `mirror` phản chiếu (rotate/shear đổi dấu, translate theo khung cha, IK bend theo setup, deform mesh không weight). Slot, constraint, draw order, event đổi bên theo.
+- Test `test/mirror.test.ts` (4): runtime xác nhận mỗi xương của bản mirror trùng ảnh phản chiếu của bản gốc. Chưa chạy `spine:check` cho phần này.
+
+## 2026-10-31 (tiếp 7)
 
 - Tool `shape_add`: attachment `point` (vị trí, hướng theo world, đi theo xương), `boundingbox` và `clipping` trong slot mới. Hình là các điểm world, hoặc `around` dò viền ảnh (region) hay viền hull (mesh) của một slot, `padding` nới ra. Clipping che các slot từ `from` tới `end` và được đặt ngay dưới `from`; key thứ tự vẽ được tính lại (slot mới nằm ngay dưới slot phía trên nó trong setup).
 - Path constraint nhận `pathBones` (và `maxInfluences`, mặc định 2): mỗi điểm của đường cong gắn trọng số vào các xương điều khiển gần nhất, tay nắm theo trọng số của điểm. Từ chối xương thuộc chính chuỗi được path kéo (vòng lặp). Tách phần tính trọng số dùng chung với `mesh_generate`.
@@ -189,5 +195,5 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 ## Việc tiếp theo
 
 1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
-2. `mirror_animation` / `mirror_bones`; pivot theo layer `[pivot]` khi import PSD (ý tưởng từ `REFERENCES.md`).
+2. Pivot theo layer `[pivot]` khi import PSD (ý tưởng từ `REFERENCES.md`); nghiệm thu `mirror_*` qua Spine (`spine:check`).
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

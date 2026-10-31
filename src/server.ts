@@ -25,6 +25,7 @@ import {
 	writeSlotKeys,
 } from "./motion.js";
 import { diffVersions } from "./diff.js";
+import { mirrorAnimation, mirrorBones } from "./mirror.js";
 import { importProject, syncProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
 import { importPsd } from "./psd.js";
@@ -456,6 +457,51 @@ export function createServer(): McpServer {
 				const what = spec.type === "point" ? "point" : `${r.vertices} vertices`;
 				return [`${spec.type} ${r.slot}: ${what}`, ...r.warnings.map((w) => `warning: ${w}`)].join("\n");
 			}),
+	);
+
+	server.registerTool(
+		"mirror_bones",
+		{
+			description:
+				"Copy one side of a rig to the other side of a vertical mirror line: the given bones and everything " +
+				"below them, their slots and attachments (same images, flipped), and their IK and physics constraints. " +
+				"Names swap side (left-arm -> right-arm, armL -> armR, eye_l -> eye_r). Then mirror_animation copies motion across.",
+			inputSchema: {
+				project,
+				bones: z.array(z.string()).min(1).describe("Top bones of the side to copy (their children come along)"),
+				axis: z.number().optional().describe("World x of the mirror line (default: the root bone's x)"),
+				sides: z.tuple([z.string(), z.string()]).optional().describe("Side words when not left/right or l/r, e.g. [\"front\", \"back\"]"),
+			},
+		},
+		({ project, ...spec }) =>
+			edit(project, `mirror ${spec.bones.join(",")}`, (ws) => {
+				const r = mirrorBones(ws, spec);
+				return [
+					`bones: ${r.bones.join(", ")}`,
+					`slots: ${r.slots.join(", ") || "none"}`,
+					`constraints: ${r.constraints.join(", ") || "none"}`,
+					...r.warnings.map((w) => `warning: ${w}`),
+				].join("\n");
+			}),
+	);
+
+	server.registerTool(
+		"mirror_animation",
+		{
+			description:
+				"Make the other side's version of an animation. mode=swap (default): left and right timelines trade " +
+				"places with their values (side views: the walk led by the other leg). mode=mirror: the motion is " +
+				"reflected across a vertical line (front views: wave with the other hand, lean the other way); needs a " +
+				"symmetric rig such as one made with mirror_bones. Slots, constraints, draw order and events swap too.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				to: z.string().optional().describe("New animation name (default <animation>-mirrored); the same name changes it in place"),
+				mode: z.enum(["swap", "mirror"]).optional(),
+				sides: z.tuple([z.string(), z.string()]).optional().describe("Side words when not left/right or l/r"),
+			},
+		},
+		({ project, ...spec }) => edit(project, `mirror animation ${spec.animation}`, (ws) => mirrorAnimation(ws, spec)),
 	);
 
 	server.registerTool(

@@ -110,6 +110,9 @@ rydspine already handles these; keep them in mind when editing JSON by hand:
 - Spine writes floats with 7–8 digits; the JS runtime reads JSON as doubles and `.skel` as float32, so a key
   exactly on a frame can land on either side of it. Compare poses between frames.
 
-## Not yet in the tools
+## Mirroring
 
-Mirroring an animation or a rig; it round-trips through import/export and `.skel` conversion but has no tool yet.
+- Build one side, then `mirror_bones` with its top bones (and IK targets): bones, slots, attachments, IK
+  (bend flipped) and physics are copied across a vertical line. Names need a side word (left/right, l/r).
+- `mirror_animation`: `swap` for side views (walk led by the other leg), `mirror` for front views on a
+  symmetric rig (wave with the other hand).

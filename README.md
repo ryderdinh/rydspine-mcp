@@ -8,7 +8,9 @@ MCP server dựng rig và animation Spine 4.3 từ yêu cầu bằng ngôn ngữ
 
 ## Cài đặt
 
-Cần Node 20+.
+**Người dùng:** mở trang [`docs/index.html`](docs/index.html) (GitHub Pages), tải bộ cài cho macOS hoặc Windows và bấm đúp. Bộ cài tải mã nguồn vào `~/.rydspine/app` rồi chạy trình cài đặt `src/setup.ts`, trình này ghi cấu hình MCP cho Claude Code, Claude Desktop và Codex. Chạy lại để cập nhật. Đóng gói lại bộ cài sau khi sửa `installer/`: `npm run installers`.
+
+**Phát triển:** cần Node 20+.
 
 ```bash
 npm install

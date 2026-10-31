@@ -214,7 +214,20 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - `spine-check.ts` tách hàm `roundTrip` dùng chung.
 - Test: 50/50 đạt.
 
+### 2026-10-31 (tiếp 11)
+
+- Bộ cài cho người khác (không cần biết dòng lệnh): trang `docs/index.html` (bật GitHub Pages thư mục `docs/`) có nút tải bộ cài theo hệ điều hành.
+  - macOS/Linux: `rydspine-setup-mac.zip` chứa `rydspine-setup.command` (zip để giữ quyền chạy; tải thẳng thì mất). Windows: `rydspine-setup-windows.bat`. Nguồn ở `installer/`, đóng gói bằng `npm run installers`.
+  - Bộ cài kiểm tra Node 20+, tải mã nguồn bằng `curl` + `tar` (không cần git) vào `~/.rydspine/app`, `npm install --omit=dev`, rồi chạy trình cài đặt `src/setup.ts` (`npm run setup`).
+  - `src/setup.ts`: hỏi từng app có trên máy rồi ghi cấu hình MCP bằng đường dẫn tuyệt đối (app GUI không thấy PATH của nvm): Claude Code (`claude mcp add -s user`, chép skill `spine-rigging`), Claude Desktop (`claude_desktop_config.json`, sao lưu trước), Codex (`codex mcp add`); hỏi tải Chromium cho preview PNG; dò Spine Editor; cuối cùng chạy server và đếm tool. Dự án lưu ở `~/.rydspine/workspaces`. Cờ `--yes`, `--clients=`, `--no-chromium`, `--home=<thư mục>` (chạy thử không đụng cấu hình thật).
+  - `tsx` và `playwright` chuyển sang `dependencies` vì máy người dùng chạy server bằng tsx và preview cần playwright.
+  - Đã thử trọn quy trình trên Mac (từ file zip giải nén bằng `ditto` như Safari, cài vào thư mục tạm): cả 3 app ghi đúng cấu hình, server chạy với 46 tool. Bộ cài Windows chưa chạy thử trên máy Windows.
+- Chặn: repo đang private, nên bộ cài (tải từ `codeload.github.com`) và GitHub Pages chỉ chạy khi repo chuyển public. Trước đó thử bằng `RYDSPINE_SOURCE=<repo>`.
+- Demo trong phiên (không commit, art do Codex vẽ): robot vẫy tay (IK, chuỗi ăng-ten, physics), tấm vải bị kéo lên (mesh nhiều xương + physics; validate bắt mesh gập và đã chỉnh), rèm cuốn từng nấc (clipping đi theo cuộn rèm, event `notch`).
+- Test: 50/50 đạt.
+
 ## Việc tiếp theo
 
-1. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
-2. Tách ảnh phẳng thành bộ phận (để sau v1).
+1. Chuyển repo sang public, bật GitHub Pages (`docs/`), thử bộ cài thật trên một máy Mac và một máy Windows khác.
+2. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
+3. Tách ảnh phẳng thành bộ phận (để sau v1).

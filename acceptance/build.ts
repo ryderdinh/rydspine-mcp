@@ -1,4 +1,4 @@
-// Acceptance suite: builds the six reference assets from REQUIREMENTS.md §5 entirely through the MCP
+// Acceptance suite: builds the six reference assets from REQUIREMENTS.md §5 (plus a lantern for constraint and sequence timelines) entirely through the MCP
 // tools, then validates, previews and exports each one.
 // Usage: npx tsx acceptance/build.ts [outDir]   (default acceptance/out)
 import { cpSync, mkdirSync, writeFileSync } from "node:fs";
@@ -130,7 +130,7 @@ async function hero(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	};
 
 	await ok("anim_create", { project, name: "run", loop: true });
-	await ok("anim_gait", { project, animation: "run", feet, body: "hips", ...run });
+	await ok("anim_gait", { project, animation: "run", feet, body: "hips", ...run, event: "footstep" });
 	await armSwing("run", run.period);
 	await ok("anim_set_keys", { project, animation: "run", bone: "torso", property: "rotate", keys: [{ time: 0, value: -8 }, { time: run.period, value: -8 }] });
 
@@ -138,7 +138,7 @@ async function hero(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	const a = "run-stop-swing";
 	const runEnd = run.period * 2;
 	await ok("anim_create", { project, name: a, loop: false });
-	const g = await ok("anim_gait", { project, animation: a, feet, body: "hips", ...run, cycles: 2 });
+	const g = await ok("anim_gait", { project, animation: a, feet, body: "hips", ...run, cycles: 2, event: "footstep" });
 	const speed = Number(g.text.match(/ground speed ([\d.]+)/)![1]);
 	await ok("anim_set_keys", { project, animation: a, bone: "root", property: "translatex", keys: [{ time: 0, value: 0 }, { time: runEnd, value: speed * runEnd }] });
 	await armSwing(a, runEnd);
@@ -226,6 +226,7 @@ async function tree(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 			part(paint, "leaves-left", ellipsePts(-84, 156, 42, 30), leaf),
 			part(paint, "leaves-right", ellipsePts(76, 184, 40, 28), [80, 170, 75]),
 			part(paint, "leaves-top", ellipsePts(-14, 230, 50, 36), [90, 180, 80]),
+			part(paint, "vine", strip([-70, 148], [-70, 64], 8, 5), [60, 130, 50]),
 		],
 	});
 	await ok("rig_template", { project, template: { kind: "chain", name: "trunk", points: [{ x: 0, y: 0 }, { x: 0, y: 180 }], segments: 3, slots: ["trunk"] } });
@@ -233,8 +234,26 @@ async function tree(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 		await ok("rig_template", { project, template: { kind: "chain", name: `${n}-`, parent, points: [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }], segments: 2, slots: [`branch-${n}`] } });
 		await ok("slot_update", { project, name: `leaves-${n}`, bone: `${n}-2` });
 	}
+	// A vine hangs from the left branch: its path is weighted to the branch and to a control bone at the
+	// tip (the vine example's setup), so the branch carries it and the control bone swings its end.
+	await ok("rig_template", { project, template: { kind: "chain", name: "vine", points: [{ x: -70, y: 148 }, { x: -70, y: 64 }], segments: 3, slots: ["vine"] } });
+	await ok("bone_add", { project, bones: [{ name: "vine-tip", x: -70, y: 64, space: "world" }] });
+	await ok("constraint_add", {
+		project,
+		constraint: {
+			type: "path",
+			name: "vine",
+			bones: ["vine1", "vine2", "vine3"],
+			points: [{ x: -70, y: 148 }, { x: -73, y: 106 }, { x: -70, y: 64 }],
+			pathBones: ["left-2", "vine-tip"],
+			spacingMode: "percent",
+			spacing: 0.33,
+			rotateMode: "chainScale",
+		},
+	});
 	const end = 3;
 	await ok("anim_create", { project, name: "wind", loop: true });
+	await ok("anim_oscillate", { project, animation: "wind", bones: ["vine-tip"], property: "translatex", amplitude: 10, period: 1.5, end, phase: 0.2 });
 	await ok("anim_oscillate", { project, animation: "wind", bones: ["trunk1", "trunk2", "trunk3"], property: "rotate", amplitude: 1.5, center: -1.5, period: 3, end, delayPerBone: 0.2, falloff: 1.4 });
 	await ok("anim_oscillate", { project, animation: "wind", bones: ["left-1", "left-2"], property: "rotate", amplitude: 5, period: 1.5, end, delayPerBone: 0.12 });
 	await ok("anim_oscillate", { project, animation: "wind", bones: ["right-1", "right-2"], property: "rotate", amplitude: 6, period: 1, end, delayPerBone: 0.1, phase: 0.3 });
@@ -260,13 +279,23 @@ async function chest(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	await ok("bone_add", { project, bones: [{ name: "chest", x: 0, y: 0, space: "world" }] });
 	for (const slot of ["glow", "box", "lock"]) await ok("slot_update", { project, name: slot, bone: "chest" });
 	await ok("rig_template", { project, template: { kind: "hinge", name: "lid", parent: "chest", pivot: { x: -62, y: 60 }, tip: { x: 62, y: 60 }, slots: ["lid"] } });
+	// Game hooks: where coins spawn (rides the lid), a hit area traced from the box, and a mask that keeps
+	// the glow inside the chest's opening.
+	await ok("shape_add", { project, type: "point", name: "coin-spawn", bone: "lid", x: 30, y: 96, rotation: 90 });
+	await ok("shape_add", { project, type: "boundingbox", name: "hit", around: "box" });
+	await ok("shape_add", { project, type: "clipping", name: "opening", bone: "chest", end: "glow", points: [{ x: -60, y: 20 }, { x: 60, y: 20 }, { x: 70, y: 150 }, { x: -70, y: 150 }] });
 	await ok("anim_create", { project, name: "open", loop: false });
-	await ok("anim_tween", { project, animation: "open", bones: ["lid"], property: "rotate", to: 72, start: 0.15, duration: 0.3, ease: "ease-out" });
+	// A custom bezier: the lid snaps open fast and eases into the top of its swing.
+	await ok("anim_tween", { project, animation: "open", bones: ["lid"], property: "rotate", to: 72, start: 0.15, duration: 0.3, ease: [0.15, 0.85, 0.35, 1] });
 	await ok("anim_bounce", { project, animation: "open", bones: ["lid"], property: "rotate", from: 72, to: 62, start: 0.45, duration: 0.5, style: "spring", bounces: 2 });
 	await ok("anim_tween", { project, animation: "open", bones: ["chest"], property: "translatey", to: 14, duration: 0.15, ease: "ease-out" });
 	await ok("anim_bounce", { project, animation: "open", bones: ["chest"], property: "translatey", from: 14, to: 0, start: 0.15, duration: 0.55, style: "drop", bounces: 1, height: 0.25 });
 	await ok("anim_bounce", { project, animation: "open", bones: ["chest"], property: "scaley", from: 0.9, to: 1, start: 0.35, duration: 0.35, style: "spring" });
 	await ok("anim_slot_keys", { project, animation: "open", slot: "glow", property: "alpha", keys: [{ time: 0, value: 0 }, { time: 0.2, value: 0, ease: "ease-out" }, { time: 0.6, value: 0.85, ease: "ease-in-out" }, { time: 1.2, value: 0.55 }] });
+	// Once the lid is up, the glow draws in front of it; sound and effect cues for the game.
+	await ok("anim_draw_order_keys", { project, animation: "open", keys: [{ time: 0.3, order: ["lid", "glow"] }] });
+	await ok("event_define", { project, name: "creak", audio: "creak.ogg", volume: 0.7 });
+	await ok("anim_event_keys", { project, animation: "open", keys: [{ time: 0.15, name: "creak" }, { time: 0.4, name: "sparkle", int: 12, string: "gold" }, { time: 0.9, name: "creak", volume: 0.3, balance: -0.5 }] });
 	await validated(ok, call, project, r);
 	return r;
 }
@@ -333,7 +362,101 @@ async function logo(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	return r;
 }
 
-export const ASSETS = { hero, dragon, tree, chest, car, logo };
+/** Constraint and image sequence timelines: a flipbook flame, keyed physics wind, a slider, a path and mix keys. */
+async function lantern(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
+	const project = "lantern";
+	const r: AssetReport = {
+		project,
+		title: "Đèn lồng",
+		prompt: "Đèn lồng đung đưa trong gió, lửa bập bùng, tua rua bay, đốm sáng chạy quanh.",
+		animations: ["sway"],
+		checks: [],
+	};
+	await ok("project_create", { name: project });
+	await ok("image_import", {
+		project,
+		images: [
+			{ path: paint.ellipse("glow", 120, 120, [255, 210, 120], { outline: 0, shade: 0 }), x: 0, y: 100 },
+			{ path: paint.rect("cap", 50, 14, [120, 40, 30], 4), x: 0, y: 150 },
+			{ path: paint.ellipse("body", 70, 90, [220, 60, 40], { shade: 0.3 }), x: 0, y: 100 },
+			part(paint, "tassel", strip([0, 54], [0, 10], 10, 4), [240, 190, 60]),
+			...["a", "b", "c"].map((n, i) => ({ path: paint.star(`spark-${n}`, 14, 4, 0.35, [255, 150, 30], { outline: 0, shade: 0 }), name: `spark-${n}`, x: -60 + 40 * i, y: 100 })),
+		],
+	});
+	// Four flame frames, each a little taller or leaner.
+	const flames = [[18, 30], [16, 36], [20, 28], [15, 34]].map(([w, h], i) => paint.ellipse(`flame-${i}`, w, h, [255, 240, 140], { outline: 0, shade: 0.2 }));
+	await ok("bone_add", {
+		project,
+		bones: [
+			{ name: "lantern", x: 0, y: 160, space: "world", length: 60, rotation: -90 },
+			{ name: "flame", parent: "lantern", x: 0, y: 100, space: "world" },
+			{ name: "glow", parent: "root", x: 0, y: 100, space: "world" },
+			{ name: "tassel", parent: "lantern", x: 0, y: 54, space: "world", length: 44, rotation: -90 },
+			{ name: "brightness", parent: "root", x: 120, y: 20, space: "world" },
+		],
+	});
+	await ok("sequence_import", { project, name: "fire", images: flames, x: 0, y: 100, bone: "flame" });
+	await ok("slot_update", { project, name: "fire", drawOrder: 3 });
+	for (const slot of ["cap", "body"]) await ok("slot_update", { project, name: slot, bone: "lantern" });
+	await ok("slot_update", { project, name: "tassel", bone: "tassel" });
+	await ok("slot_update", { project, name: "glow", bone: "glow" });
+	await ok("rig_template", { project, template: { kind: "chain", name: "spark", points: [{ x: -60, y: 100 }, { x: 60, y: 100 }], segments: 3 } });
+	// Each spark sits on its bone's origin, so it rides the path exactly.
+	for (const [i, n] of ["a", "b", "c"].entries()) await ok("slot_update", { project, name: `spark-${n}`, bone: `spark${i + 1}` });
+	// The glow trails the flame (holder pattern from the examples, with a partial mix).
+	await ok("constraint_add", {
+		project,
+		constraint: { type: "transform", name: "glow-follow", bones: ["glow"], source: "flame", properties: { x: { to: { x: {} } }, y: { to: { y: {} } } }, mixX: 0.6, mixY: 0.6 },
+	});
+	await ok("constraint_add", { project, constraint: { type: "physics", name: "tassel-sway", bone: "tassel", rotate: 1, inertia: 0.4, strength: 120, damping: 0.85, mass: 2.8 } });
+	await ok("constraint_add", {
+		project,
+		constraint: {
+			type: "path",
+			name: "orbit",
+			bones: ["spark1", "spark2", "spark3"],
+			points: [{ x: 0, y: 175 }, { x: 70, y: 100 }, { x: 0, y: 25 }, { x: -70, y: 100 }],
+			closed: true,
+			pathBone: "lantern",
+			spacingMode: "percent",
+			spacing: 0.33,
+		},
+	});
+	await ok("anim_create", { project, name: "flicker", loop: false });
+	await ok("anim_slot_keys", { project, animation: "flicker", slot: "glow", property: "alpha", keys: [{ time: 0, value: 0.3 }, { time: 1, value: 1 }] });
+	await ok("constraint_add", { project, constraint: { type: "slider", name: "light", animation: "flicker", time: 0.8 } });
+
+	const a = "sway";
+	await ok("anim_create", { project, name: a, loop: true });
+	await ok("anim_oscillate", { project, animation: a, bones: ["lantern"], property: "rotate", amplitude: 8, period: 2, end: 2 });
+	await ok("anim_sequence_keys", { project, animation: a, slot: "fire", keys: [{ time: 0, mode: "loop", delay: 1 / 12 }] });
+	await ok("anim_constraint_keys", {
+		project,
+		animation: a,
+		constraint: "tassel-sway",
+		property: "wind",
+		keys: [{ time: 0, value: 0, ease: "ease-in-out" }, { time: 1, value: 40, ease: "ease-in-out" }, { time: 2, value: 0 }],
+	});
+	await ok("anim_constraint_keys", { project, animation: a, constraint: "orbit", property: "position", keys: [{ time: 0, value: 0 }, { time: 2, value: 1 }] });
+	await ok("anim_constraint_keys", {
+		project,
+		animation: a,
+		constraint: "glow-follow",
+		property: "mix",
+		keys: [{ time: 0, mixX: 0.6, mixY: 0.6, ease: "ease-in-out" }, { time: 1, mixX: 1, mixY: 0.9, ease: "ease-in-out" }, { time: 2, mixX: 0.6, mixY: 0.6 }],
+	});
+	await ok("anim_constraint_keys", {
+		project,
+		animation: a,
+		constraint: "light",
+		property: "time",
+		keys: [{ time: 0, value: 0.8, ease: "ease-in-out" }, { time: 0.5, value: 0.4, ease: "ease-in-out" }, { time: 1.2, value: 1, ease: "ease-in-out" }, { time: 2, value: 0.8 }],
+	});
+	await validated(ok, call, project, r);
+	return r;
+}
+
+export const ASSETS = { hero, dragon, tree, chest, car, logo, lantern };
 
 export async function buildAll(outDir: string): Promise<AssetReport[]> {
 	const { root, ok, call } = await connect();
@@ -355,7 +478,7 @@ export async function buildAll(outDir: string): Promise<AssetReport[]> {
 	writeFileSync(join(outDir, "report.json"), `${JSON.stringify(reports, null, 2)}\n`);
 	// The studio page for these assets; studio.html is the fragment for publishing, studio-local.html opens directly.
 	const extras = Object.fromEntries(reports.map((r) => [r.project, r]));
-	const subtitle = "Six acceptance assets, rigged and animated through the rydspine MCP tools";
+	const subtitle = "Seven acceptance assets, rigged and animated through the rydspine MCP tools";
 	writeFileSync(join(outDir, "studio.html"), render(collect(extras), { player: "cdn", document: false, subtitle }));
 	writeFileSync(join(outDir, "studio-local.html"), render(collect(extras), { player: "cdn", document: true, subtitle }));
 	return reports;

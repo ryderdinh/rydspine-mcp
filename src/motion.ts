@@ -1,14 +1,18 @@
 // Animation keys and motion primitives. Bone timeline values are offsets from the setup pose
 // (scale timelines are multipliers), so motions compose without knowing the rig's absolute pose.
-import type { AnimationJson, Curve, ValueKey } from "./types.js";
-import { UserError, type Workspace } from "./workspace.js";
+import { type DrawOrderJson, orderToOffsets } from "./draworder.js";
+import type { AnimationJson, Curve, EventJson, ValueKey } from "./types.js";
+import { checkName, UserError, type Workspace } from "./workspace.js";
 import { assertUnlocked, findBone } from "./rig.js";
+import { load } from "./runtime.js";
 
 export const PROPERTIES = ["rotate", "translatex", "translatey", "scalex", "scaley", "shearx", "sheary"] as const;
 export type Property = (typeof PROPERTIES)[number];
 
 export const EASES = ["linear", "stepped", "ease-in", "ease-out", "ease-in-out", "back-in", "back-out"] as const;
 export type Ease = (typeof EASES)[number];
+/** A preset, or a CSS-style cubic-bezier [x1, y1, x2, y2] in 0..1 of the segment's time and value. */
+export type EaseSpec = Ease | [number, number, number, number];
 
 const BEZIER: Record<Exclude<Ease, "linear" | "stepped">, [number, number, number, number]> = {
 	"ease-in": [0.42, 0, 1, 1],
@@ -20,16 +24,31 @@ const BEZIER: Record<Exclude<Ease, "linear" | "stepped">, [number, number, numbe
 
 const EPS = 1e-4;
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
+/**
+ * Key times on (or within 2ms of) a 30fps frame are written as that exact frame: Spine Editor snaps
+ * near-frame times when it imports, so 0.033 would otherwise move to 1/30 and shift the pose.
+ */
+const rt = (t: number) => {
+	const frame = Math.round(t * 30);
+	return Math.abs(t * 30 - frame) < 0.06 ? Math.round((frame / 30) * 1e8) / 1e8 : r3(t);
+};
 const neutral = (p: Property) => (p === "scalex" || p === "scaley" ? 1 : 0);
 
 /** Spine stores a segment's curve as bezier control points in (time, value) space. */
-function easeCurve(ease: Ease, t0: number, v0: number, t1: number, v1: number): Curve | undefined {
+function easeCurve(ease: EaseSpec, t0: number, v0: number, t1: number, v1: number): Curve | undefined {
 	if (ease === "linear") return undefined;
 	if (ease === "stepped") return "stepped";
-	const [x1, y1, x2, y2] = BEZIER[ease];
+	const [x1, y1, x2, y2] = typeof ease === "string" ? BEZIER[ease] : checkBezier(ease);
 	const dt = t1 - t0;
 	const dv = v1 - v0;
 	return [t0 + x1 * dt, v0 + y1 * dv, t0 + x2 * dt, v0 + y2 * dv].map(r3);
+}
+
+/** Control point times must stay inside the segment, or the curve would run backwards in time. */
+function checkBezier(b: number[]): [number, number, number, number] {
+	if (b.length !== 4 || b.some((v) => !Number.isFinite(v))) throw new UserError("a bezier ease is [x1, y1, x2, y2]");
+	if (b[0] < 0 || b[0] > 1 || b[2] < 0 || b[2] > 1) throw new UserError(`bezier ease [${b.join(", ")}]: x1 and x2 must be within 0..1`);
+	return b as [number, number, number, number];
 }
 
 /** Cubic Hermite segment (values and slopes at both ends) as a Spine bezier. */
@@ -41,7 +60,7 @@ function hermite(t0: number, v0: number, d0: number, t1: number, v1: number, d1:
 export interface Key {
 	time: number;
 	value: number;
-	ease?: Ease;
+	ease?: EaseSpec;
 	curve?: Curve;
 }
 
@@ -72,7 +91,7 @@ export function writeKeys(ws: Workspace, anim: string, bone: string, property: P
 	const kept = tl.filter((k) => (k.time ?? 0) < start - EPS || (k.time ?? 0) > end + EPS);
 
 	const fresh: ValueKey[] = sorted.map((k, i) => {
-		const out: ValueKey = { time: r3(k.time), value: r3(k.value) };
+		const out: ValueKey = { time: rt(k.time), value: r3(k.value) };
 		const next = sorted[i + 1];
 		const curve = k.curve ?? (next && k.ease ? easeCurve(k.ease, k.time, k.value, next.time, next.value) : undefined);
 		if (curve) out.curve = curve;
@@ -89,11 +108,25 @@ export function writeKeys(ws: Workspace, anim: string, bone: string, property: P
 
 export function animDuration(ws: Workspace, anim: string): number {
 	let max = 0;
-	const a = animation(ws, anim);
-	for (const group of [a.bones ?? {}, a.slots ?? {}])
-		for (const tls of Object.values(group))
-			for (const keys of Object.values(tls)) for (const k of keys as { time?: number }[]) max = Math.max(max, k.time ?? 0);
+	// Every timeline is an array of keys with an optional time, however deep it sits (bones, slots,
+	// constraints, attachment sequences).
+	const walk = (node: unknown): void => {
+		if (Array.isArray(node)) {
+			for (const k of node) if (k && typeof k === "object" && typeof (k as { time?: unknown }).time === "number") max = Math.max(max, (k as { time: number }).time);
+		} else if (node && typeof node === "object") for (const v of Object.values(node)) walk(v);
+	};
+	walk(animation(ws, anim));
 	return max;
+}
+
+/** Puts fresh keys in place of the old ones between their first and last time, keeping keys outside. */
+function mergeKeys<T extends { time?: number; curve?: unknown }>(old: T[], fresh: T[]): T[] {
+	const [start, end] = [fresh[0].time ?? 0, fresh[fresh.length - 1].time ?? 0];
+	const kept = old.filter((k) => (k.time ?? 0) < start - EPS || (k.time ?? 0) > end + EPS);
+	// A kept key right before the range pointed its curve at a key that no longer exists.
+	const before = kept.filter((k) => (k.time ?? 0) < start - EPS).pop();
+	if (before) delete before.curve;
+	return [...kept, ...fresh].sort((x, y) => (x.time ?? 0) - (y.time ?? 0));
 }
 
 export const SLOT_PROPERTIES = ["alpha", "rgba", "attachment"] as const;
@@ -107,7 +140,7 @@ export interface SlotKey {
 	color?: string;
 	/** attachment: name, or null to hide */
 	name?: string | null;
-	ease?: Ease;
+	ease?: EaseSpec;
 }
 
 /** Slot timelines: fade (alpha), tint (rgba, linear or stepped) and attachment swaps (blink, open mouth). */
@@ -117,32 +150,165 @@ export function writeSlotKeys(ws: Workspace, anim: string, slot: string, propert
 	if (!ws.doc.slots.some((s) => s.name === slot)) throw new UserError(`slot "${slot}" not found`);
 	if (!keys.length) return;
 	const sorted = [...keys].sort((a, b) => a.time - b.time);
-	const [start, end] = [sorted[0].time, sorted[sorted.length - 1].time];
 	const fresh = sorted.map((k, i) => {
 		const next = sorted[i + 1];
 		if (property === "attachment") {
 			if (k.name === undefined) throw new UserError("attachment keys need a name (or null)");
-			return { time: r3(k.time), name: k.name };
+			return { time: rt(k.time), name: k.name };
 		}
 		if (property === "alpha") {
 			if (k.value === undefined) throw new UserError("alpha keys need a value");
-			const out: ValueKey = { time: r3(k.time), value: r3(k.value) };
+			const out: ValueKey = { time: rt(k.time), value: r3(k.value) };
 			const curve = next && k.ease ? easeCurve(k.ease, k.time, k.value, next.time, next.value ?? k.value) : undefined;
 			if (curve) out.curve = curve;
 			return out;
 		}
 		if (!k.color || !/^[0-9a-fA-F]{8}$/.test(k.color)) throw new UserError("rgba keys need color as RRGGBBAA");
 		if (k.ease && k.ease !== "linear" && k.ease !== "stepped") throw new UserError("rgba keys support linear or stepped only");
-		return k.ease === "stepped" ? { time: r3(k.time), color: k.color, curve: "stepped" } : { time: r3(k.time), color: k.color };
+		return k.ease === "stepped" ? { time: rt(k.time), color: k.color, curve: "stepped" } : { time: rt(k.time), color: k.color };
 	});
 	const a = animation(ws, anim);
 	a.slots ??= {};
 	a.slots[slot] ??= {};
-	const old = (a.slots[slot][property] ?? []) as { time?: number; curve?: unknown }[];
-	const kept = old.filter((k) => (k.time ?? 0) < start - EPS || (k.time ?? 0) > end + EPS);
-	const before = kept.filter((k) => (k.time ?? 0) < start - EPS).pop();
-	if (before) delete before.curve;
-	a.slots[slot][property] = [...kept, ...fresh].sort((x, y) => ((x as { time?: number }).time ?? 0) - ((y as { time?: number }).time ?? 0));
+	a.slots[slot][property] = mergeKeys((a.slots[slot][property] ?? []) as { time?: number; curve?: unknown }[], fresh);
+}
+
+export const CONSTRAINT_PROPERTIES = ["mix", "position", "spacing", "time", "inertia", "strength", "damping", "mass", "wind", "gravity", "reset"] as const;
+export type ConstraintProperty = (typeof CONSTRAINT_PROPERTIES)[number];
+
+/** Timelines each constraint type has, as the Spine 4.3 runtime reads them. */
+const CONSTRAINT_TIMELINES: Record<string, readonly ConstraintProperty[]> = {
+	ik: ["mix"],
+	transform: ["mix"],
+	path: ["position", "spacing", "mix"],
+	physics: ["inertia", "strength", "damping", "mass", "wind", "gravity", "mix", "reset"],
+	slider: ["time", "mix"],
+};
+
+/** Channels a timeline interpolates; each has its own bezier in a curve. */
+function channels(type: string, property: ConstraintProperty): string[] {
+	if (property === "reset") return [];
+	if (property !== "mix" || type === "physics" || type === "slider") return ["value"];
+	if (type === "ik") return ["mix", "softness"];
+	if (type === "transform") return ["mixRotate", "mixX", "mixY", "mixScaleX", "mixScaleY", "mixShearY"];
+	return ["mixRotate", "mixX", "mixY"];
+}
+
+export interface ConstraintKey {
+	time: number;
+	/** Single-value timelines: path position/spacing, slider time/mix, physics values. */
+	value?: number;
+	mix?: number;
+	softness?: number;
+	bendPositive?: boolean;
+	compress?: boolean;
+	stretch?: boolean;
+	mixRotate?: number;
+	mixX?: number;
+	mixY?: number;
+	mixScaleX?: number;
+	mixScaleY?: number;
+	mixShearY?: number;
+	ease?: EaseSpec;
+}
+
+/** The constraint's setup values, which keys fall back to for channels they leave out. */
+function setupValues(ws: Workspace, name: string, type: string, property: ConstraintProperty): Record<string, number | boolean> {
+	if (!name) return {};
+	const data = load(ws).data.constraints.find((c) => c.name === name) as unknown as { setupPose: Record<string, number | boolean> };
+	const p = data.setupPose;
+	if (type === "ik") return { mix: p.mix, softness: p.softness, bendPositive: (p.bendDirection as number) > 0, compress: p.compress, stretch: p.stretch };
+	if (property === "mix" && (type === "transform" || type === "path")) return p;
+	if (property === "mass") return { value: 1 / (p.massInverse as number) };
+	return { value: p[property] as number };
+}
+
+/**
+ * Keys a constraint timeline: IK mix/softness/bend, transform and path mixes, path position and spacing,
+ * physics settings and resets, slider time and mix. Channels a key leaves out keep the setup value.
+ * Physics with constraint "" keys every physics constraint at once.
+ */
+export function writeConstraintKeys(ws: Workspace, anim: string, name: string, property: ConstraintProperty, keys: ConstraintKey[]): string {
+	assertUnlocked(ws, "animations", [anim]);
+	const constraint = ws.doc.constraints.find((c) => c.name === name);
+	if (name && !constraint) throw new UserError(`constraint "${name}" not found`);
+	const type = constraint?.type ?? "physics";
+	const allowed = CONSTRAINT_TIMELINES[type];
+	if (!allowed.includes(property)) throw new UserError(`${type} constraints have ${allowed.join(", ")} timelines, not ${property}`);
+	if (!keys.length) return "";
+	const setup = setupValues(ws, name, type, property);
+	const names = channels(type, property);
+	const sorted = [...keys].sort((a, b) => a.time - b.time);
+	const values = sorted.map((k) =>
+		names.map((c) => {
+			const v = (k as unknown as Record<string, number | undefined>)[c] ?? (c === "value" ? k.mix : c === "mix" ? k.value : undefined) ?? setup[c];
+			if (typeof v !== "number") throw new UserError(`keys at ${k.time}s need ${c}`);
+			return v;
+		}),
+	);
+	if (property === "mass" && values.some(([v]) => v <= 0)) throw new UserError("mass must be greater than 0");
+	if (property === "time" && values.some(([v]) => v < 0)) throw new UserError("slider time must be 0 or more");
+	const fresh = sorted.map((k, i) => {
+		const out: Record<string, unknown> = { time: rt(k.time) };
+		names.forEach((c, j) => (out[c] = r3(values[i][j])));
+		if (type === "ik")
+			for (const flag of ["bendPositive", "compress", "stretch"] as const) out[flag] = k[flag] ?? setup[flag];
+		const next = sorted[i + 1];
+		if (next && k.ease && k.ease !== "linear" && names.length) {
+			if (k.ease === "stepped") out.curve = "stepped";
+			else out.curve = names.flatMap((_, j) => easeCurve(k.ease!, k.time, values[i][j], next.time, values[i + 1][j]) as number[]);
+		}
+		return out as { time?: number; curve?: unknown };
+	});
+	const a = animation(ws, anim) as Record<string, Record<string, unknown>>;
+	a[type] ??= {};
+	if (type === "ik" || type === "transform") a[type][name] = mergeKeys((a[type][name] ?? []) as typeof fresh, fresh);
+	else {
+		const group = (a[type][name] ??= {}) as Record<string, typeof fresh>;
+		group[property] = mergeKeys(group[property] ?? [], fresh);
+	}
+	return `${sorted.length} key(s) on ${name || "all physics"} ${property}${names.length > 1 ? ` (${names.join(", ")})` : ""}`;
+}
+
+export const SEQUENCE_MODES = ["hold", "once", "loop", "pingpong", "onceReverse", "loopReverse", "pingpongReverse"] as const;
+
+export interface SequenceKey {
+	time: number;
+	mode?: (typeof SEQUENCE_MODES)[number];
+	/** Frame to start from (0-based). */
+	index?: number;
+	/** Seconds per frame. */
+	delay?: number;
+}
+
+/** Plays an image sequence attachment: mode, starting frame and seconds per frame from each key on. */
+export function writeSequenceKeys(ws: Workspace, anim: string, slot: string, attachment: string | undefined, keys: SequenceKey[], skin = "default"): void {
+	assertUnlocked(ws, "animations", [anim]);
+	const s = ws.doc.slots.find((x) => x.name === slot);
+	if (!s) throw new UserError(`slot "${slot}" not found`);
+	const name = attachment ?? s.attachment ?? slot;
+	const sk = ws.doc.skins.find((x) => x.name === skin);
+	if (!sk) throw new UserError(`skin "${skin}" not found`);
+	const att = sk.attachments[slot]?.[name] as { sequence?: { count: number } } | undefined;
+	if (!att) throw new UserError(`attachment "${name}" not found in slot "${slot}" of skin "${skin}"`);
+	if (!att.sequence) throw new UserError(`attachment "${name}" is not an image sequence (make one with sequence_import)`);
+	if (!keys.length) return;
+	const count = att.sequence.count;
+	const sorted = [...keys].sort((a, b) => a.time - b.time);
+	const fresh = sorted.map((k) => {
+		if (k.index !== undefined && (k.index < 0 || k.index >= count || !Number.isInteger(k.index)))
+			throw new UserError(`index ${k.index} is outside the ${count} frames (0..${count - 1})`);
+		if (k.delay !== undefined && k.delay < 0) throw new UserError("delay must be 0 or more");
+		const out: { time: number; mode?: string; index?: number; delay?: number } = { time: rt(k.time) };
+		if (k.mode && k.mode !== "hold") out.mode = k.mode;
+		if (k.index) out.index = k.index;
+		if (k.delay) out.delay = r3(k.delay);
+		return out;
+	});
+	const a = animation(ws, anim) as Record<string, unknown>;
+	const bySkin = ((a.attachments ??= {}) as Record<string, Record<string, Record<string, Record<string, unknown>>>>);
+	const timelines = (((bySkin[skin] ??= {})[slot] ??= {})[name] ??= {});
+	timelines.sequence = mergeKeys((timelines.sequence ?? []) as typeof fresh, fresh);
 }
 
 export interface GaitSpec {
@@ -163,6 +329,8 @@ export interface GaitSpec {
 	bob?: number;
 	start?: number;
 	cycles?: number;
+	/** Event to fire as each foot lands (string value: the foot bone), e.g. "footstep". */
+	event?: string;
 }
 
 /**
@@ -200,8 +368,22 @@ export function gait(ws: Workspace, s: GaitSpec): string {
 			center: -s.bob,
 		});
 	}
+	// A foot lands where its cycle wraps to 0: t = start + period * (k - phase).
+	const lands = s.feet.map((foot) => {
+		const out: number[] = [];
+		for (let k = 0; k <= cycles + 1; k++) {
+			const t = start + s.period * (k - foot.phase);
+			if (t >= start - EPS && t < end - EPS) out.push(rt(t));
+		}
+		return { bone: foot.bone, times: out };
+	});
+	if (s.event)
+		writeEventKeys(ws, s.animation, lands.flatMap((l) => l.times.map((time) => ({ time, name: s.event!, string: l.bone }))));
 	const speed = s.stride / (contact * s.period);
-	return `ground speed ${r3(speed)} px/s (move the character at this speed so planted feet do not slide)`;
+	return [
+		`ground speed ${r3(speed)} px/s (move the character at this speed so planted feet do not slide)`,
+		`feet land at: ${lands.map((l) => `${l.bone} ${l.times.join(", ")}`).join("; ")}${s.event ? ` (event ${s.event} keyed)` : ""}`,
+	].join("\n");
 }
 
 interface Chain {
@@ -272,7 +454,7 @@ export interface TweenSpec extends Chain {
 	from?: number;
 	start?: number;
 	duration: number;
-	ease?: Ease;
+	ease?: EaseSpec;
 	/** Fraction of the move to wind up in the opposite direction first. */
 	anticipation?: number;
 }
@@ -355,4 +537,138 @@ export function bounce(ws: Workspace, s: BounceSpec): void {
 		});
 		writeKeys(ws, s.animation, bone, s.property, keys, [t0, t0 + s.duration]);
 	});
+}
+
+export interface EventDef extends EventJson {
+	name: string;
+}
+
+/** Defines an event (footstep, hit, sound cue) or changes its setup values; keys inherit those values. */
+export function defineEvent(ws: Workspace, d: EventDef): string {
+	checkName("event", d.name);
+	if (d.volume !== undefined && (d.volume < 0 || d.volume > 1)) throw new UserError("volume must be within 0..1");
+	if (d.balance !== undefined && (d.balance < -1 || d.balance > 1)) throw new UserError("balance must be within -1..1");
+	if ((d.volume !== undefined || d.balance !== undefined) && !d.audio && !ws.doc.events?.[d.name]?.audio)
+		throw new UserError("volume and balance apply to audio events; give audio too");
+	const events = eventsOf(ws);
+	const existed = d.name in events;
+	const e: EventJson = (events[d.name] ??= {});
+	if (d.int !== undefined) setOrDrop(e, "int", Math.round(d.int), 0);
+	if (d.float !== undefined) setOrDrop(e, "float", r3(d.float), 0);
+	if (d.string !== undefined) setOrDrop(e, "string", d.string, "");
+	if (d.audio !== undefined) setOrDrop(e, "audio", d.audio, "");
+	if (d.volume !== undefined) setOrDrop(e, "volume", r3(d.volume), 1);
+	if (d.balance !== undefined) setOrDrop(e, "balance", r3(d.balance), 0);
+	if (!e.audio) {
+		delete e.volume;
+		delete e.balance;
+	}
+	return `${existed ? "updated" : "defined"} event ${d.name}`;
+}
+
+function setOrDrop<K extends keyof EventJson>(o: EventJson, k: K, v: EventJson[K], fallback: EventJson[K]): void {
+	if (v === fallback) delete o[k];
+	else o[k] = v;
+}
+
+/** Spine JSON lists events before animations; keep that order when adding the first one. */
+function eventsOf(ws: Workspace): Record<string, EventJson> {
+	if (ws.doc.events) return ws.doc.events;
+	const { animations, ...rest } = ws.doc;
+	for (const k of Object.keys(ws.doc)) delete (ws.doc as Record<string, unknown>)[k];
+	Object.assign(ws.doc, rest, { events: {}, animations });
+	return ws.doc.events!;
+}
+
+export interface EventKey {
+	time: number;
+	name: string;
+	int?: number;
+	float?: number;
+	string?: string;
+	volume?: number;
+	balance?: number;
+}
+
+/**
+ * Fires events during an animation. A key replaces an event with the same name at the same time;
+ * `replace` clears the animation's events first. Events not defined yet are defined with no values.
+ */
+export function writeEventKeys(ws: Workspace, anim: string, keys: EventKey[], replace = false): string {
+	assertUnlocked(ws, "animations", [anim]);
+	const a = animation(ws, anim);
+	const defined: string[] = [];
+	for (const k of keys)
+		if (!ws.doc.events?.[k.name]) {
+			defineEvent(ws, { name: k.name });
+			defined.push(k.name);
+		}
+	const fresh = keys.map((k) => {
+		const def = ws.doc.events![k.name];
+		const out: Record<string, unknown> = { time: rt(k.time), name: k.name };
+		if (k.int !== undefined && Math.round(k.int) !== (def.int ?? 0)) out.int = Math.round(k.int);
+		if (k.float !== undefined && r3(k.float) !== (def.float ?? 0)) out.float = r3(k.float);
+		if (k.string !== undefined && k.string !== (def.string ?? "")) out.string = k.string;
+		if ((k.volume !== undefined || k.balance !== undefined) && !def.audio) throw new UserError(`event "${k.name}" has no audio; volume and balance need one`);
+		if (k.volume !== undefined && r3(k.volume) !== (def.volume ?? 1)) out.volume = r3(k.volume);
+		if (k.balance !== undefined && r3(k.balance) !== (def.balance ?? 0)) out.balance = r3(k.balance);
+		return out as { time: number; name: string };
+	});
+	const old = replace ? [] : ((a.events ?? []) as { time?: number; name: string }[]);
+	const kept = old.filter((o) => !fresh.some((f) => f.name === o.name && Math.abs((o.time ?? 0) - f.time) < EPS));
+	// Stable sort: events at the same time fire in the order given.
+	a.events = [...kept, ...fresh].sort((x, y) => (x.time ?? 0) - (y.time ?? 0));
+	return `${fresh.length} event key(s) on ${anim}${defined.length ? `; defined ${defined.join(", ")}` : ""}`;
+}
+
+export interface DrawOrderKey {
+	time: number;
+	/**
+	 * Slot names back to front. All slots, or some of them: listed slots trade the places they hold in
+	 * setup among themselves. Omitted or empty: back to the setup order.
+	 */
+	order?: string[];
+}
+
+/** Changes the draw order during an animation (an arm swinging behind the body, a card flipping). */
+export function writeDrawOrderKeys(ws: Workspace, anim: string, keys: DrawOrderKey[]): string {
+	assertUnlocked(ws, "animations", [anim]);
+	if (!keys.length) return "";
+	const setup = ws.doc.slots.map((s) => s.name);
+	const sorted = [...keys].sort((a, b) => a.time - b.time);
+	const fresh = sorted.map((k) => {
+		const out: DrawOrderJson = { time: rt(k.time) };
+		const order = k.order ?? [];
+		for (const n of order) if (!setup.includes(n)) throw new UserError(`slot "${n}" not found`);
+		if (new Set(order).size !== order.length) throw new UserError(`draw order at ${k.time}s lists a slot twice`);
+		const names = [...setup];
+		const places = order.map((n) => setup.indexOf(n)).sort((x, y) => x - y);
+		places.forEach((p, i) => (names[p] = order[i]));
+		const offsets = orderToOffsets(setup, names.map((n) => setup.indexOf(n)));
+		if (offsets) out.offsets = offsets;
+		return out;
+	});
+	const a = animation(ws, anim);
+	a.drawOrder = mergeKeys((a.drawOrder ?? []) as DrawOrderJson[], fresh);
+	const moved = fresh.map((k) => k.offsets?.length ?? 0);
+	return `${fresh.length} draw order key(s) on ${anim} (slots moved: ${moved.join(", ")})`;
+}
+
+/** Deletes an event and every key that fires it. */
+export function removeEvent(ws: Workspace, name: string): string {
+	if (!ws.doc.events?.[name]) throw new UserError(`event "${name}" not found`);
+	const locked = Object.entries(ws.doc.animations).filter(([n, a]) => ws.meta.locks.animations.includes(n) && (a.events as { name: string }[] | undefined)?.some((e) => e.name === name));
+	if (locked.length) throw new UserError(`event "${name}" is keyed in locked animation ${locked.map(([n]) => n).join(", ")}`);
+	delete ws.doc.events[name];
+	if (!Object.keys(ws.doc.events).length) delete ws.doc.events;
+	let removed = 0;
+	for (const a of Object.values(ws.doc.animations)) {
+		const keys = a.events as { name: string }[] | undefined;
+		if (!keys) continue;
+		const left = keys.filter((e) => e.name !== name);
+		removed += keys.length - left.length;
+		if (left.length) a.events = left;
+		else delete a.events;
+	}
+	return `removed event ${name} and ${removed} key(s)`;
 }

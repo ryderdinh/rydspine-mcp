@@ -103,6 +103,8 @@ export class Workspace {
 	/** Saves the current state as a new version. */
 	commit(message: string): number {
 		this.meta.version++;
+		// Spine sorts animations on import but resolves slider animations by their index in the file.
+		this.doc.animations = Object.fromEntries(spineOrder(Object.keys(this.doc.animations)).map((n) => [n, this.doc.animations[n]]));
 		writeFileSync(join(this.dir, "skeleton.json"), `${JSON.stringify(this.doc, null, 2)}\n`);
 		writeFileSync(join(this.dir, "project.json"), `${JSON.stringify(this.meta, null, 2)}\n`);
 		const snap: Snapshot = {
@@ -147,4 +149,29 @@ export class Workspace {
 	private snapshotPath(version: number): string {
 		return join(this.dir, "history", `${String(version).padStart(5, "0")}.json`);
 	}
+}
+
+/** Compares like Spine's tree: numbers by value, letters case-insensitively (as upper case, so "_" sorts after "Z"). */
+function naturalCompare(a: string, b: string): number {
+	const parts = (s: string) => s.match(/\d+|\D/g) ?? [];
+	const [p, q] = [parts(a), parts(b)];
+	for (let i = 0; i < Math.min(p.length, q.length); i++) {
+		const [x, y] = [p[i], q[i]];
+		const digits = /^\d/.test(x) && /^\d/.test(y);
+		const d = digits ? Number(x) - Number(y) : x.toUpperCase().charCodeAt(0) - y.toUpperCase().charCodeAt(0);
+		if (d) return d;
+	}
+	return p.length - q.length || (a < b ? -1 : a > b ? 1 : 0);
+}
+
+/** Animation names in the order Spine Editor lists them: names at a level first, then folders ("idle/loop"). */
+export function spineOrder(names: string[]): string[] {
+	const leaves = names.filter((n) => !n.includes("/")).sort(naturalCompare);
+	const folders = new Map<string, string[]>();
+	for (const n of names.filter((n) => n.includes("/"))) {
+		const [head, ...rest] = n.split("/");
+		folders.set(head, [...(folders.get(head) ?? []), rest.join("/")]);
+	}
+	const nested = [...folders.keys()].sort(naturalCompare).flatMap((f) => spineOrder(folders.get(f) ?? []).map((n) => `${f}/${n}`));
+	return [...leaves, ...nested];
 }

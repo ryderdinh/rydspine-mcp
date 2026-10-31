@@ -16,12 +16,23 @@ import {
 	DeformTimeline,
 	DrawOrderTimeline,
 	EventTimeline,
+	type FromProperty,
+	FromRotate,
+	FromScaleX,
+	FromScaleY,
+	FromShearY,
+	FromX,
+	FromY,
 	IkConstraintData,
 	IkConstraintTimeline,
 	Inherit,
 	InheritTimeline,
 	MeshAttachment,
 	PathAttachment,
+	PathConstraintData,
+	PathConstraintMixTimeline,
+	PathConstraintPositionTimeline,
+	PathConstraintSpacingTimeline,
 	PhysicsConstraintData,
 	PhysicsConstraintDampingTimeline,
 	PhysicsConstraintGravityTimeline,
@@ -32,30 +43,48 @@ import {
 	PhysicsConstraintStrengthTimeline,
 	PhysicsConstraintWindTimeline,
 	PointAttachment,
+	PositionMode,
 	RegionAttachment,
 	RGBA2Timeline,
 	RGBATimeline,
 	RGB2Timeline,
 	RGBTimeline,
+	RotateMode,
 	RotateTimeline,
 	ScaleTimeline,
 	ScaleXTimeline,
 	ScaleYMode,
 	ScaleYTimeline,
+	type Sequence,
+	SequenceMode,
+	SequenceTimeline,
 	ShearTimeline,
 	ShearXTimeline,
 	ShearYTimeline,
 	type SkeletonData,
 	SkeletonBinary,
 	type Skin,
+	SliderData,
+	SliderMixTimeline,
+	SliderTimeline,
+	SpacingMode,
 	TextureAtlas,
 	type TextureAtlasRegion,
 	type Timeline,
+	ToRotate,
+	ToScaleX,
+	ToScaleY,
+	ToShearY,
+	ToX,
+	ToY,
+	TransformConstraintData,
+	TransformConstraintTimeline,
 	TranslateTimeline,
 	TranslateXTimeline,
 	TranslateYTimeline,
 	type VertexAttachment,
 } from "@esotericsoftware/spine-core";
+import { orderToOffsets } from "./draworder.js";
 import type { SkeletonDoc } from "./types.js";
 import { UserError } from "./workspace.js";
 
@@ -76,7 +105,12 @@ class PlaceholderLoader extends AtlasAttachmentLoader {
 
 /** Shortest decimal that round-trips the runtime's float32 value. */
 const r = (n: number) => {
-	const v = Number(Math.fround(n).toPrecision(7));
+	const f = Math.fround(n);
+	let v = f;
+	for (let digits = 6; digits <= 9; digits++) {
+		v = Number(f.toPrecision(digits));
+		if (Math.fround(v) === f) break;
+	}
 	return Object.is(v, -0) ? 0 : v;
 };
 const hex = (c: number) => Math.round(Math.max(0, Math.min(1, c)) * 255).toString(16).padStart(2, "0");
@@ -89,6 +123,27 @@ function put(o: Json, key: string, value: unknown, fallback?: unknown): void {
 	if (typeof value === "number" && typeof fallback === "number" && Math.abs(value - fallback) < 1e-6) return;
 	if (value === fallback) return;
 	o[key] = typeof value === "number" ? r(value) : value;
+}
+
+/** JSON name of a transform or slider property, by its runtime class. */
+function propertyName(p: object): string {
+	const names: [new () => object, string][] = [
+		[FromRotate, "rotate"], [FromX, "x"], [FromY, "y"], [FromScaleX, "scaleX"], [FromScaleY, "scaleY"], [FromShearY, "shearY"],
+		[ToRotate, "rotate"], [ToX, "x"], [ToY, "y"], [ToScaleX, "scaleX"], [ToScaleY, "scaleY"], [ToShearY, "shearY"],
+	];
+	const found = names.find(([cls]) => p instanceof cls);
+	if (!found) throw new UserError(`unknown constraint property ${p.constructor.name}`);
+	return found[1];
+}
+
+/** Skin key that lists constraints of this kind, or null for kinds JSON skins cannot list. */
+function constraintKind(c: object): string | null {
+	if (c instanceof IkConstraintData) return "ik";
+	if (c instanceof TransformConstraintData) return "transform";
+	if (c instanceof PathConstraintData) return "path";
+	if (c instanceof PhysicsConstraintData) return "physics";
+	if (c instanceof SliderData) return "slider";
+	return null;
 }
 
 export function skelToJson(binary: Uint8Array): SkeletonDoc {
@@ -171,6 +226,72 @@ export function skelToJson(binary: Uint8Array): SkeletonDoc {
 			put(o, "mix", s.mix, 1);
 			for (const k of ["inertia", "strength", "damping", "mass", "wind", "gravity", "mix"] as const)
 				if (c[`${k}Global`]) o[`${k}Global`] = true;
+		} else if (c instanceof TransformConstraintData) {
+			o.type = "transform";
+			o.bones = c.bones.map((b) => b.name);
+			o.source = c.source.name;
+			for (const k of ["localSource", "localTarget", "additive", "clamp"] as const) if (c[k]) o[k] = true;
+			const properties: Json = {};
+			const used = new Set<string>();
+			for (const from of c.properties as FromProperty[]) {
+				const name = propertyName(from);
+				if (properties[name]) unsupported.add(`transform constraint "${c.name}" with two ${name} sources`);
+				const p: Json = {};
+				put(p, "offset", from.offset, 0);
+				const to: Json = {};
+				for (const t of from.to) {
+					const tn = propertyName(t);
+					used.add(tn);
+					const e: Json = {};
+					put(e, "offset", t.offset, 0);
+					put(e, "max", t.max, 1);
+					put(e, "scale", t.scale, 1);
+					to[tn] = e;
+				}
+				p.to = to;
+				properties[name] = p;
+			}
+			o.properties = properties;
+			const offsets = ["rotation", "x", "y", "scaleX", "scaleY", "shearY"] as const;
+			offsets.forEach((k, i) => put(o, k, c.offsets[i], 0));
+			const s = c.setupPose;
+			// The JSON reader only reads the mixes for properties some source drives.
+			if (used.has("rotate")) put(o, "mixRotate", s.mixRotate, 1);
+			if (used.has("x")) put(o, "mixX", s.mixX, 1);
+			// mixY and mixScaleY default to the setup mixX and mixScaleX, which are only read when x or scaleX are driven.
+			if (used.has("y")) put(o, "mixY", s.mixY, used.has("x") ? s.mixX : Number.NaN);
+			if (used.has("scaleX")) put(o, "mixScaleX", s.mixScaleX, 1);
+			if (used.has("scaleY")) put(o, "mixScaleY", s.mixScaleY, used.has("scaleX") ? s.mixScaleX : Number.NaN);
+			if (used.has("shearY")) put(o, "mixShearY", s.mixShearY, 1);
+		} else if (c instanceof PathConstraintData) {
+			o.type = "path";
+			o.bones = c.bones.map((b) => b.name);
+			o.slot = c.slot.name;
+			if (c.positionMode !== PositionMode.Percent) o.positionMode = lowerFirst(PositionMode[c.positionMode]);
+			if (c.spacingMode !== SpacingMode.Length) o.spacingMode = lowerFirst(SpacingMode[c.spacingMode]);
+			if (c.rotateMode !== RotateMode.Tangent) o.rotateMode = lowerFirst(RotateMode[c.rotateMode]);
+			put(o, "rotation", c.offsetRotation, 0);
+			const s = c.setupPose;
+			put(o, "position", s.position, 0);
+			put(o, "spacing", s.spacing, 0);
+			put(o, "mixRotate", s.mixRotate, 1);
+			put(o, "mixX", s.mixX, 1);
+			put(o, "mixY", s.mixY, s.mixX);
+		} else if (c instanceof SliderData) {
+			o.type = "slider";
+			if (c.additive) o.additive = true;
+			if (c.loop) o.loop = true;
+			put(o, "mix", c.setupPose.mix, 1);
+			if (c.animation) o.animation = c.animation.name;
+			if (c.bone) {
+				o.bone = c.bone.name;
+				o.property = propertyName(c.property);
+				put(o, "from", c.property.offset, 0);
+				put(o, "to", c.offset, 0);
+				put(o, "scale", c.scale, 1);
+				put(o, "max", c.max, 0);
+				if (c.local) o.local = true;
+			} else put(o, "time", c.setupPose.time, 0);
 		} else {
 			unsupported.add(`${c.constructor.name} "${c.name}"`);
 		}
@@ -218,17 +339,29 @@ function vertices(att: VertexAttachment): number[] {
 	return out;
 }
 
-function findAttachmentName(data: SkeletonData, target: Attachment): { skin: string; name: string } | null {
+function findAttachmentName(data: SkeletonData, target: Attachment): { skin: string; slot: number; name: string } | null {
 	for (const skin of data.skins)
-		for (const e of skin.getAttachments()) if (e.attachment === target) return { skin: skin.name, name: e.placeholder };
+		for (const e of skin.getAttachments()) if (e.attachment === target) return { skin: skin.name, slot: e.slotIndex, name: e.placeholder };
 	return null;
+}
+
+function writeSequence(a: Json, sequence: Sequence, where: string, unsupported: Set<string>): void {
+	if (!sequence.pathSuffix) {
+		if (sequence.regions.length > 1) unsupported.add(`image sequence without numbered paths on ${where}`);
+		return;
+	}
+	const o: Json = { count: sequence.regions.length };
+	put(o, "start", sequence.start, 1);
+	put(o, "digits", sequence.digits, 0);
+	put(o, "setup", sequence.setupIndex, 0);
+	a.sequence = o;
 }
 
 function writeSkin(data: SkeletonData, skin: Skin, unsupported: Set<string>): Json {
 	const o: Json = { name: skin.name };
 	if (skin.bones.length) o.bones = skin.bones.map((b) => b.name);
 	for (const c of skin.constraints) {
-		const key = c instanceof IkConstraintData ? "ik" : c instanceof PhysicsConstraintData ? "physics" : null;
+		const key = constraintKind(c);
 		if (!key) continue;
 		((o[key] as string[]) ??= []).push(c.name);
 	}
@@ -239,8 +372,8 @@ function writeSkin(data: SkeletonData, skin: Skin, unsupported: Set<string>): Js
 		const a: Json = {};
 		if (att.name !== entry.placeholder) a.name = att.name;
 		if (att instanceof RegionAttachment) {
-			if (att.sequence.regions.length > 1 || att.sequence.pathSuffix) unsupported.add(`image sequence on ${slot}/${entry.placeholder}`);
 			if (att.path && att.path !== att.name) a.path = att.path;
+			writeSequence(a, att.sequence, `${slot}/${entry.placeholder}`, unsupported);
 			for (const k of ["x", "y", "rotation"] as const) put(a, k, att[k], 0);
 			put(a, "scaleX", att.scaleX, 1);
 			put(a, "scaleY", att.scaleY, 1);
@@ -248,8 +381,8 @@ function writeSkin(data: SkeletonData, skin: Skin, unsupported: Set<string>): Js
 			a.height = r(att.height);
 			if (rgba(att.color) !== "ffffffff") a.color = rgba(att.color);
 		} else if (att instanceof MeshAttachment) {
-			if (att.sequence.regions.length > 1 || att.sequence.pathSuffix) unsupported.add(`image sequence on ${slot}/${entry.placeholder}`);
 			if (att.path && att.path !== att.name) a.path = att.path;
+			writeSequence(a, att.sequence, `${slot}/${entry.placeholder}`, unsupported);
 			if (rgba(att.color) !== "ffffffff") a.color = rgba(att.color);
 			put(a, "width", att.width, 0);
 			put(a, "height", att.height, 0);
@@ -261,6 +394,7 @@ function writeSkin(data: SkeletonData, skin: Skin, unsupported: Set<string>): Js
 				else {
 					a.source = found.name;
 					if (found.skin !== "default") a.skin = found.skin;
+					if (found.slot !== entry.slotIndex) a.slot = data.slots[found.slot].name;
 				}
 				if (att.timelineAttachment !== source) a.timelines = false;
 			} else {
@@ -304,25 +438,6 @@ function writeSkin(data: SkeletonData, skin: Skin, unsupported: Set<string>): Js
 	}
 	o.attachments = attachments;
 	return o;
-}
-
-function longestIncreasing(seq: number[]): Set<number> {
-	const tails: number[] = [];
-	const prev = new Array<number>(seq.length).fill(-1);
-	seq.forEach((v, i) => {
-		let lo = 0;
-		let hi = tails.length;
-		while (lo < hi) {
-			const mid = (lo + hi) >> 1;
-			if (seq[tails[mid]] < v) lo = mid + 1;
-			else hi = mid;
-		}
-		prev[i] = lo > 0 ? tails[lo - 1] : -1;
-		tails[lo] = i;
-	});
-	const out = new Set<number>();
-	for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = prev[i]) out.add(seq[i]);
-	return out;
 }
 
 /** Recovers a bezier's control points from the runtime's samples, for one value channel. */
@@ -387,6 +502,9 @@ function writeAnimation(data: SkeletonData, anim: Animation, unsupported: Set<st
 	const slots: Record<string, Json> = {};
 	const ik: Json = {};
 	const physics: Record<string, Json> = {};
+	const transform: Json = {};
+	const path: Record<string, Json> = {};
+	const slider: Record<string, Json> = {};
 	const attachments: Record<string, Record<string, Record<string, Json>>> = {};
 	const out: Json = {};
 	const one = (key: string, dflt?: number) => (v: number[]) => (dflt !== undefined && Math.abs(v[0] - dflt) < 1e-6 ? {} : { [key]: r(v[0]) });
@@ -395,6 +513,15 @@ function writeAnimation(data: SkeletonData, anim: Animation, unsupported: Set<st
 		withAlpha ? `${hex(v[0])}${hex(v[1])}${hex(v[2])}${hex(v[3])}` : `${hex(v[0])}${hex(v[1])}${hex(v[2])}`;
 	const boneKey = (tl: { boneIndex: number }) => (bones[data.bones[tl.boneIndex].name] ??= {});
 	const slotKey = (tl: { slotIndex: number }) => (slots[data.slots[tl.slotIndex].name] ??= {});
+	const constraintName = (tl: { constraintIndex: number }) => data.constraints[tl.constraintIndex].name;
+	const attachmentKey = (tl: { slotIndex: number }, att: Attachment, what: string): Json | null => {
+		const found = findAttachmentName(data, att);
+		if (!found) {
+			unsupported.add(`${what} on an unknown attachment in ${anim.name}`);
+			return null;
+		}
+		return (((attachments[found.skin] ??= {})[data.slots[tl.slotIndex].name] ??= {})[found.name] ??= {});
+	};
 	const physicsKey = (tl: { constraintIndex: number }) => (physics[tl.constraintIndex === -1 ? "" : data.constraints[tl.constraintIndex].name] ??= {});
 
 	for (const tl of anim.timelines as Timeline[]) {
@@ -435,11 +562,8 @@ function writeAnimation(data: SkeletonData, anim: Animation, unsupported: Set<st
 			slotKey(tl).attachment = keys;
 		} else if (tl instanceof DeformTimeline) {
 			const att = tl.attachment;
-			const found = findAttachmentName(data, att);
-			if (!found) {
-				unsupported.add(`deform on an unknown attachment in ${anim.name}`);
-				continue;
-			}
+			const target = attachmentKey(tl, att, "deform");
+			if (!target) continue;
 			const setup = att.bones ? null : att.vertices;
 			const frames = (tl as unknown as { vertices: ArrayLike<number>[] }).vertices;
 			const keys: Json[] = [];
@@ -460,8 +584,46 @@ function writeAnimation(data: SkeletonData, anim: Animation, unsupported: Set<st
 				}
 				keys.push(k);
 			}
-			const slotName = data.slots[tl.slotIndex].name;
-			((attachments[found.skin] ??= {})[slotName] ??= {})[found.name] = { deform: keys };
+			target.deform = keys;
+		} else if (tl instanceof SequenceTimeline) {
+			const target = attachmentKey(tl, tl.attachment, "image sequence");
+			if (!target) continue;
+			let lastDelay = 0;
+			target.sequence = Array.from({ length: tl.getFrameCount() }, (_, i) => {
+				const f = tl.frames;
+				const k: Json = {};
+				if (f[i * 3]) k.time = r(f[i * 3]);
+				const modeAndIndex = f[i * 3 + 1];
+				if ((modeAndIndex & 0xf) !== SequenceMode.hold) k.mode = SequenceMode[modeAndIndex & 0xf];
+				if (modeAndIndex >> 4) k.index = modeAndIndex >> 4;
+				// Each key's delay defaults to the previous key's.
+				if (f[i * 3 + 2] !== lastDelay) k.delay = r(f[i * 3 + 2]);
+				lastDelay = f[i * 3 + 2];
+				return k;
+			});
+		} else if (tl instanceof TransformConstraintTimeline) {
+			const names = ["mixRotate", "mixX", "mixY", "mixScaleX", "mixScaleY", "mixShearY"];
+			transform[constraintName(tl)] = curveKeys(tl, names, (v) => {
+				const k: Json = {};
+				names.forEach((n, i) => put(k, n, v[i], n === "mixY" ? v[1] : 1));
+				return k;
+			});
+		} else if (tl instanceof PathConstraintPositionTimeline) {
+			(path[constraintName(tl)] ??= {}).position = curveKeys(tl, ["value"], one("value", 0));
+		} else if (tl instanceof PathConstraintSpacingTimeline) {
+			(path[constraintName(tl)] ??= {}).spacing = curveKeys(tl, ["value"], one("value", 0));
+		} else if (tl instanceof PathConstraintMixTimeline) {
+			(path[constraintName(tl)] ??= {}).mix = curveKeys(tl, ["mixRotate", "mixX", "mixY"], (v) => {
+				const k: Json = {};
+				put(k, "mixRotate", v[0], 1);
+				put(k, "mixX", v[1], 1);
+				put(k, "mixY", v[2], v[1]);
+				return k;
+			});
+		} else if (tl instanceof SliderTimeline) {
+			(slider[constraintName(tl)] ??= {}).time = curveKeys(tl, ["value"], one("value", 1));
+		} else if (tl instanceof SliderMixTimeline) {
+			(slider[constraintName(tl)] ??= {}).mix = curveKeys(tl, ["value"], one("value", 1));
 		} else if (tl instanceof DrawOrderTimeline) {
 			const orders = (tl as unknown as { drawOrders: (number[] | null)[] }).drawOrders;
 			out.drawOrder = Array.from({ length: tl.getFrameCount() }, (_, i) => {
@@ -470,12 +632,8 @@ function writeAnimation(data: SkeletonData, anim: Animation, unsupported: Set<st
 				const order = orders[i];
 				if (order) {
 					// Slots on the longest run already in setup order stay put; only the others are listed.
-					const keep = longestIncreasing(order);
-					k.offsets = order
-						.map((slotIndex, position) => ({ slotIndex, position }))
-						.filter((e) => !keep.has(e.slotIndex))
-						.sort((a, b) => a.slotIndex - b.slotIndex)
-						.map((e) => ({ slot: data.slots[e.slotIndex].name, offset: e.position - e.slotIndex }));
+					const offsets = orderToOffsets(data.slots.map((s) => s.name), order);
+					if (offsets) k.offsets = offsets;
 				}
 				return k;
 			});
@@ -538,7 +696,10 @@ function writeAnimation(data: SkeletonData, anim: Animation, unsupported: Set<st
 	if (Object.keys(slots).length) out.slots = slots;
 	if (Object.keys(bones).length) out.bones = bones;
 	if (Object.keys(ik).length) out.ik = ik;
+	if (Object.keys(transform).length) out.transform = transform;
+	if (Object.keys(path).length) out.path = path;
 	if (Object.keys(physics).length) out.physics = physics;
+	if (Object.keys(slider).length) out.slider = slider;
 	if (Object.keys(attachments).length) out.attachments = attachments;
 	return out;
 }

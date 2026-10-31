@@ -10,7 +10,9 @@
     "typecheck": "tsc",
     "spike:check": "tsx spike/runtime-check.ts",
     "acceptance": "tsx acceptance/build.ts",
-    "ui": "tsx src/ui.ts"
+    "spine:check": "tsx acceptance/spine-check.ts",
+    "ui": "tsx src/ui.ts",
+    "skel:examples": "tsx acceptance/skel-examples.ts"
   },
   "dependencies": {
     "@esotericsoftware/spine-core": "4.3.13",

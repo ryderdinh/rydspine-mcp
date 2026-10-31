@@ -3,9 +3,9 @@
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { ClippingAttachment, MeshAttachment, RegionAttachment } from "@esotericsoftware/spine-core";
+import { BoundingBoxAttachment, ClippingAttachment, MeshAttachment, PointAttachment, RegionAttachment, Vector2 } from "@esotericsoftware/spine-core";
 import { composePage, imageSize, pack } from "./atlas.js";
-import { FPS, type Loaded, load, play } from "./runtime.js";
+import { FPS, type Loaded, load, play, shownPath } from "./runtime.js";
 import { UserError, type Workspace } from "./workspace.js";
 
 const require = createRequire(import.meta.url);
@@ -61,6 +61,8 @@ function drawFrame(
 		return [x, -y];
 	};
 	let clipEnd: unknown = null;
+	// Hit areas and points are drawn over the art, like the bones.
+	const overlay: string[] = [];
 	const alpha = skeleton.color.a;
 	for (const slot of skeleton.drawOrder.appliedPose) {
 		const att = slot.appliedPose.getAttachment();
@@ -79,16 +81,18 @@ function drawFrame(
 		} else if (att instanceof RegionAttachment) {
 			const v = new Array<number>(8);
 			att.computeWorldVertices(slot, att.getOffsets(slot.appliedPose), v, 0, 2);
-			const { width, height } = imageSize(join(ws.imagesDir, `${att.path}.png`));
+			const path = shownPath(att, slot.appliedPose);
+			const { width, height } = imageSize(join(ws.imagesDir, `${path}.png`));
 			const [bl, ul, ur] = [pt(v[0], v[1]), pt(v[2], v[3]), pt(v[4], v[5])];
 			pt(v[6], v[7]);
 			const m = affine([[0, 0], [width, 0], [0, height]], [ul, ur, bl]);
-			if (m) parts.push(`<use href="#${ids.get(att.path!)}" transform="${m}"${opacity}/>`);
+			if (m) parts.push(`<use href="#${ids.get(path)}" transform="${m}"${opacity}/>`);
 		} else if (att instanceof MeshAttachment) {
 			const n = att.worldVerticesLength;
 			const v = new Array<number>(n);
 			att.computeWorldVertices(skeleton, slot, 0, n, v, 0, 2);
-			const { width, height } = imageSize(join(ws.imagesDir, `${att.path}.png`));
+			const path = shownPath(att, slot.appliedPose);
+			const { width, height } = imageSize(join(ws.imagesDir, `${path}.png`));
 			const uv = att.regionUVs;
 			const t = att.triangles;
 			for (let i = 0; i < t.length; i += 3) {
@@ -100,9 +104,24 @@ function drawFrame(
 				const poly = q.map(([x, y]) => `${f2(x)},${f2(y)}`).join(" ");
 				parts.push(
 					`<clipPath id="${id}"><polygon points="${poly}" stroke="#000" stroke-width="0.6"/></clipPath>` +
-						`<g clip-path="url(#${id})"><use href="#${ids.get(att.path!)}" transform="${m}"${opacity}/></g>`,
+						`<g clip-path="url(#${id})"><use href="#${ids.get(path)}" transform="${m}"${opacity}/></g>`,
 				);
 			}
+		}
+		if (showBones && att instanceof BoundingBoxAttachment) {
+			const n = att.worldVerticesLength;
+			const v = new Array<number>(n);
+			att.computeWorldVertices(skeleton, slot, 0, n, v, 0, 2);
+			const poly: string[] = [];
+			for (let i = 0; i < n; i += 2) poly.push(pt(v[i], v[i + 1]).map(f2).join(","));
+			overlay.push(`<polygon points="${poly.join(" ")}" class="box"/>`);
+		} else if (showBones && att instanceof PointAttachment) {
+			const p = slot.bone.appliedPose;
+			const w = att.computeWorldPosition(p, new Vector2());
+			const r = (att.computeWorldRotation(p) * Math.PI) / 180;
+			const [x0, y0] = pt(w.x, w.y);
+			const [x1, y1] = pt(w.x + Math.cos(r) * 14, w.y + Math.sin(r) * 14);
+			overlay.push(`<circle cx="${f2(x0)}" cy="${f2(y0)}" r="3" class="mark"/><line x1="${f2(x0)}" y1="${f2(y0)}" x2="${f2(x1)}" y2="${f2(y1)}" class="mark"/>`);
 		}
 		if (clipEnd === slot.data) {
 			parts.push("</g>");
@@ -110,6 +129,7 @@ function drawFrame(
 		}
 	}
 	if (clipEnd) parts.push("</g>");
+	parts.push(...overlay);
 	if (showBones) {
 		for (const bone of skeleton.bones) {
 			const p = bone.appliedPose;
@@ -184,7 +204,7 @@ export function renderSvg(ws: Workspace, spec: PreviewSpec): string {
 		.join("");
 	return (
 		`<svg xmlns="http://www.w3.org/2000/svg" width="${Math.ceil(w * frames.length)}" height="${Math.ceil(h + LABEL)}">` +
-		`<style>.bone{stroke:#e0306a;stroke-width:2}.joint{fill:#fff;stroke:#e0306a;stroke-width:1.5}` +
+		`<style>.bone{stroke:#e0306a;stroke-width:2}.joint{fill:#fff;stroke:#e0306a;stroke-width:1.5}.box{fill:none;stroke:#3cb000;stroke-width:1.5;stroke-dasharray:4 3}.mark{fill:none;stroke:#d09000;stroke-width:2}` +
 		`.cell{fill:none;stroke:#ccc}text{font:12px sans-serif;fill:#555}</style>` +
 		`<defs>${defs}</defs><rect width="100%" height="100%" fill="#f4f4f4"/>${cells}</svg>`
 	);

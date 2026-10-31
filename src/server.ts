@@ -5,14 +5,35 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { bounce, EASES, gait, oscillate, PROPERTIES, SLOT_PROPERTIES, tween, writeKeys, writeSlotKeys } from "./motion.js";
+import {
+	bounce,
+	CONSTRAINT_PROPERTIES,
+	defineEvent,
+	EASES,
+	gait,
+	oscillate,
+	PROPERTIES,
+	SEQUENCE_MODES,
+	SLOT_PROPERTIES,
+	tween,
+	removeEvent,
+	writeConstraintKeys,
+	writeDrawOrderKeys,
+	writeEventKeys,
+	writeKeys,
+	writeSequenceKeys,
+	writeSlotKeys,
+} from "./motion.js";
 import { diffVersions } from "./diff.js";
+import { mirrorAnimation, mirrorBones } from "./mirror.js";
 import { importProject, syncProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
 import { importPsd } from "./psd.js";
 import {
 	addBone,
 	addConstraint,
+	addShape,
+	importSequence,
 	assertUnlocked,
 	describe,
 	generateMesh,
@@ -65,6 +86,10 @@ function edit(project: string, message: string, fn: (ws: Workspace) => string | 
 const project = z.string().describe("Project name");
 const space = z.enum(["local", "world"]).optional().describe("Coordinate space for x/y/rotation (default local)");
 const property = z.enum(PROPERTIES);
+const ease = z
+	.union([z.enum(EASES), z.tuple([z.number().min(0).max(1), z.number(), z.number().min(0).max(1), z.number()])])
+	.optional()
+	.describe("Curve of the segment after the key: a preset, or a CSS cubic-bezier [x1, y1, x2, y2] (y may overshoot 0..1)");
 const chain = {
 	bones: z.array(z.string()).min(1).describe("Bones to animate; for a chain, list root to tip"),
 	delayPerBone: z.number().optional().describe("Seconds each bone lags the previous one (follow-through)"),
@@ -360,6 +385,31 @@ export function createServer(): McpServer {
 	);
 
 	server.registerTool(
+		"sequence_import",
+		{
+			description:
+				"Import PNG frames as one image sequence attachment (flipbook: flames, sparkles, blinking lights, " +
+				"hand-drawn effects), centered at world (x, y). Makes a new slot on top, or adds the attachment to slot. " +
+				"Play it with anim_sequence_keys.",
+			inputSchema: {
+				project,
+				name: z.string().describe("Attachment name (and the new slot's name)"),
+				images: z.array(z.string()).min(2).describe("PNG files, in playing order"),
+				slot: z.string().optional().describe("Existing slot to add the attachment to"),
+				x: z.number().optional(),
+				y: z.number().optional(),
+				bone: z.string().optional().describe("Bone for a new slot (default root)"),
+				setup: z.number().int().min(0).optional().describe("Frame shown in the setup pose (default 0)"),
+			},
+		},
+		(a) =>
+			edit(a.project, `import sequence ${a.name}`, (ws) => {
+				const r = importSequence(ws, a);
+				return [`${r.slot}: ${r.frames} frames, ${r.width}x${r.height}`, ...r.warnings.map((w) => `warning: ${w}`)].join("\n");
+			}),
+	);
+
+	server.registerTool(
 		"attachment_update",
 		{
 			description: "Move, rotate or scale a region attachment inside its slot.",
@@ -376,6 +426,82 @@ export function createServer(): McpServer {
 			},
 		},
 		(args) => edit(args.project, `update attachment in ${args.slot}`, (ws) => void updateAttachment(ws, args)),
+	);
+
+	server.registerTool(
+		"shape_add",
+		{
+			description:
+				"Add a point (a marker the game reads: muzzle, hand grip, spawn spot), a bounding box (hit area) or a " +
+				"clipping mask, each in a new slot. Shapes are world points, or around=<slot> traces that slot's image " +
+				"outline or mesh hull. A clipping masks the slots from `from` (default end) up to `end` and is placed " +
+				"right below `from`.",
+			inputSchema: {
+				project,
+				type: z.enum(["point", "boundingbox", "clipping"]),
+				name: z.string().describe("attachment and new slot name"),
+				bone: z.string().optional().describe("bone the slot follows (default: the bone of around, else root)"),
+				x: z.number().optional().describe("point: world x (default the bone's origin)"),
+				y: z.number().optional(),
+				rotation: z.number().optional().describe("point: world rotation in degrees"),
+				points: z.array(point).min(3).optional().describe("boundingbox/clipping: world polygon"),
+				around: z.string().optional().describe("boundingbox/clipping: trace this slot's art instead of points"),
+				padding: z.number().min(0).max(32).optional().describe("around: grow the outline by px (default 2)"),
+				from: z.string().optional().describe("clipping: first slot masked"),
+				end: z.string().optional().describe("clipping: last slot masked (required)"),
+			},
+		},
+		({ project, ...spec }) =>
+			edit(project, `add ${spec.type} ${spec.name}`, (ws) => {
+				const r = addShape(ws, spec);
+				const what = spec.type === "point" ? "point" : `${r.vertices} vertices`;
+				return [`${spec.type} ${r.slot}: ${what}`, ...r.warnings.map((w) => `warning: ${w}`)].join("\n");
+			}),
+	);
+
+	server.registerTool(
+		"mirror_bones",
+		{
+			description:
+				"Copy one side of a rig to the other side of a vertical mirror line: the given bones and everything " +
+				"below them, their slots and attachments (same images, flipped), and their IK and physics constraints. " +
+				"Names swap side (left-arm -> right-arm, armL -> armR, eye_l -> eye_r). Then mirror_animation copies motion across.",
+			inputSchema: {
+				project,
+				bones: z.array(z.string()).min(1).describe("Top bones of the side to copy (their children come along)"),
+				axis: z.number().optional().describe("World x of the mirror line (default: the root bone's x)"),
+				sides: z.tuple([z.string(), z.string()]).optional().describe("Side words when not left/right or l/r, e.g. [\"front\", \"back\"]"),
+			},
+		},
+		({ project, ...spec }) =>
+			edit(project, `mirror ${spec.bones.join(",")}`, (ws) => {
+				const r = mirrorBones(ws, spec);
+				return [
+					`bones: ${r.bones.join(", ")}`,
+					`slots: ${r.slots.join(", ") || "none"}`,
+					`constraints: ${r.constraints.join(", ") || "none"}`,
+					...r.warnings.map((w) => `warning: ${w}`),
+				].join("\n");
+			}),
+	);
+
+	server.registerTool(
+		"mirror_animation",
+		{
+			description:
+				"Make the other side's version of an animation. mode=swap (default): left and right timelines trade " +
+				"places with their values (side views: the walk led by the other leg). mode=mirror: the motion is " +
+				"reflected across a vertical line (front views: wave with the other hand, lean the other way); needs a " +
+				"symmetric rig such as one made with mirror_bones. Slots, constraints, draw order and events swap too.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				to: z.string().optional().describe("New animation name (default <animation>-mirrored); the same name changes it in place"),
+				mode: z.enum(["swap", "mirror"]).optional(),
+				sides: z.tuple([z.string(), z.string()]).optional().describe("Side words when not left/right or l/r"),
+			},
+		},
+		({ project, ...spec }) => edit(project, `mirror animation ${spec.animation}`, (ws) => mirrorAnimation(ws, spec)),
 	);
 
 	server.registerTool(
@@ -453,11 +579,58 @@ export function createServer(): McpServer {
 			})
 			.loose()
 			.describe("Secondary motion (hair, tails, antennae): set rotate to 1 for rotational follow"),
+		z
+			.object({
+				type: z.literal("path"),
+				name: z.string(),
+				bones: z.array(z.string()).min(1).describe("bones laid along the path, parents first (e.g. a chain from rig_template)"),
+				points: z
+					.array(point)
+					.min(2)
+					.optional()
+					.describe("world points the path passes through, read off the art; creates slot <name>-path with a smooth path"),
+				closed: z.boolean().optional().describe("loop the path (treads, conveyor belts)"),
+				pathBone: z.string().optional().describe("bone the new path slot follows (default root); bones on it bend the path"),
+				pathBones: z
+					.array(z.string())
+					.optional()
+					.describe("control bones that bend the new path, each point weighted to the nearest (like Spine's examples); not bones on the chain"),
+				maxInfluences: z.number().int().min(1).max(4).optional().describe("bones per path point with pathBones (default 2)"),
+				slot: z.string().optional().describe("existing slot holding a path attachment, instead of points"),
+				positionMode: z.enum(["percent", "fixed"]).optional(),
+				spacingMode: z.enum(["length", "fixed", "percent", "proportional"]).optional(),
+				rotateMode: z.enum(["tangent", "chain", "chainScale"]).optional(),
+				position: z.number().optional(),
+				spacing: z.number().optional(),
+				mixRotate: mix,
+				mixX: mix,
+				mixY: mix,
+			})
+			.loose()
+			.describe("Bones follow a curve: rubber limbs (percent spacing, chainScale), chains and treads (length spacing, chain); animate position to slide along it"),
+		z
+			.object({
+				type: z.literal("slider"),
+				name: z.string(),
+				animation: z.string().describe("existing animation the slider plays (create it first)"),
+				time: z.number().optional().describe("setup time in seconds when no bone drives the slider"),
+				bone: z.string().optional().describe("drive the time from this bone's property (a control bone)"),
+				property: z.enum(["rotate", "x", "y", "scaleX", "scaleY", "shearY"]).optional(),
+				from: z.number().optional().describe("property value that maps to time `to`"),
+				to: z.number().optional(),
+				scale: z.number().optional().describe("seconds per unit of the property (e.g. 1/360 for one turn per second)"),
+				local: z.boolean().optional(),
+				loop: z.boolean().optional(),
+				additive: z.boolean().optional(),
+				mix,
+			})
+			.loose()
+			.describe("Pose an animation by a value: a dial, a facial expression blend, a turn-around sheet"),
 	]);
 
 	server.registerTool(
 		"constraint_add",
-		{ description: "Add an IK, transform or physics constraint.", inputSchema: { project, constraint } },
+		{ description: "Add an IK, transform, path, physics or slider constraint.", inputSchema: { project, constraint } },
 		({ project, constraint }) =>
 			edit(project, `add ${constraint.type} ${constraint.name}`, (ws) => void addConstraint(ws, constraint as ConstraintJson)),
 	);
@@ -522,6 +695,8 @@ export function createServer(): McpServer {
 			edit(project, `remove animation ${name}`, (ws) => {
 				assertUnlocked(ws, "animations", [name]);
 				if (!ws.doc.animations[name]) throw new UserError(`animation "${name}" not found`);
+				const sliders = ws.doc.constraints.filter((c) => c.type === "slider" && c.animation === name);
+				if (sliders.length) throw new UserError(`animation "${name}" is played by slider ${sliders.map((c) => c.name).join(", ")}`);
 				delete ws.doc.animations[name];
 				delete ws.meta.loops[name];
 			}),
@@ -538,7 +713,7 @@ export function createServer(): McpServer {
 				animation: z.string(),
 				bone: z.string(),
 				property,
-				keys: z.array(z.object({ time: z.number().min(0), value: z.number(), ease: z.enum(EASES).optional() })).min(1),
+				keys: z.array(z.object({ time: z.number().min(0), value: z.number(), ease: ease })).min(1),
 				range: z.tuple([z.number(), z.number()]).optional(),
 			},
 		},
@@ -584,7 +759,7 @@ export function createServer(): McpServer {
 				from: z.number().optional(),
 				start: z.number().min(0).optional(),
 				duration: z.number().positive(),
-				ease: z.enum(EASES).optional(),
+				ease: ease,
 				anticipation: z.number().min(0).max(1).optional(),
 				...chain,
 			},
@@ -634,7 +809,7 @@ export function createServer(): McpServer {
 							value: z.number().min(0).max(1).optional(),
 							color: z.string().optional(),
 							name: z.string().nullable().optional(),
-							ease: z.enum(EASES).optional(),
+							ease: ease,
 						}),
 					)
 					.min(1),
@@ -644,11 +819,155 @@ export function createServer(): McpServer {
 	);
 
 	server.registerTool(
+		"anim_constraint_keys",
+		{
+			description:
+				"Key a constraint over time. ik mix: mix (or value), softness, bendPositive, compress, stretch. " +
+				"transform mix: mixRotate, mixX, mixY, mixScaleX, mixScaleY, mixShearY. path: position or spacing (value), " +
+				"mix (mixRotate, mixX, mixY); animate position to slide bones along the path or roll treads. " +
+				"physics: inertia, strength, damping, mass, wind, gravity, mix (value) or reset (time only; constraint \"\" = all " +
+				"physics). slider: time (value, seconds into its animation) or mix. Channels a key leaves out keep the setup " +
+				"value. Replaces keys between the first and last given time.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				constraint: z.string(),
+				property: z.enum(CONSTRAINT_PROPERTIES),
+				keys: z
+					.array(
+						z.object({
+							time: z.number().min(0),
+							value: z.number().optional(),
+							mix: z.number().optional(),
+							softness: z.number().optional(),
+							bendPositive: z.boolean().optional(),
+							compress: z.boolean().optional(),
+							stretch: z.boolean().optional(),
+							mixRotate: z.number().optional(),
+							mixX: z.number().optional(),
+							mixY: z.number().optional(),
+							mixScaleX: z.number().optional(),
+							mixScaleY: z.number().optional(),
+							mixShearY: z.number().optional(),
+							ease: ease,
+						}),
+					)
+					.min(1),
+			},
+		},
+		(a) =>
+			edit(a.project, `constraint keys ${a.animation} ${a.constraint || "physics"}.${a.property}`, (ws) =>
+				writeConstraintKeys(ws, a.animation, a.constraint, a.property, a.keys),
+			),
+	);
+
+	server.registerTool(
+		"event_define",
+		{
+			description:
+				"Define an event a game listens for (footstep, hit, spawn, sound cue), or change its setup values; " +
+				"anim_event_keys keys inherit them. audio is a path under the skeleton's audio folder; volume and balance " +
+				"apply to audio events. remove deletes the event and every key that fires it.",
+			inputSchema: {
+				project,
+				name: z.string(),
+				int: z.number().int().optional(),
+				float: z.number().optional(),
+				string: z.string().optional(),
+				audio: z.string().optional(),
+				volume: z.number().min(0).max(1).optional(),
+				balance: z.number().min(-1).max(1).optional(),
+				remove: z.boolean().optional(),
+			},
+		},
+		({ project, remove, ...d }) =>
+			edit(project, `${remove ? "remove" : "define"} event ${d.name}`, (ws) => (remove ? removeEvent(ws, d.name) : defineEvent(ws, d))),
+	);
+
+	server.registerTool(
+		"anim_event_keys",
+		{
+			description:
+				"Fire events at times in an animation (footsteps on contact frames, a hit on impact, a sound cue). Values a " +
+				"key leaves out come from event_define; undefined events are defined on the fly. A key replaces an event of " +
+				"the same name at the same time; replace clears the animation's events first.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				keys: z
+					.array(
+						z.object({
+							time: z.number().min(0),
+							name: z.string(),
+							int: z.number().int().optional(),
+							float: z.number().optional(),
+							string: z.string().optional(),
+							volume: z.number().min(0).max(1).optional(),
+							balance: z.number().min(-1).max(1).optional(),
+						}),
+					)
+					.min(1),
+				replace: z.boolean().optional(),
+			},
+		},
+		(a) => edit(a.project, `events ${a.animation}`, (ws) => writeEventKeys(ws, a.animation, a.keys, a.replace)),
+	);
+
+	server.registerTool(
+		"anim_draw_order_keys",
+		{
+			description:
+				"Change which slots draw in front during an animation (an arm swinging behind the body, a card turning over). " +
+				"Each key's order lists slot names back to front: all slots, or just the ones that move, which then trade " +
+				"the places they hold in setup (e.g. [body, arm] puts arm in front of body). No order: back to setup. " +
+				"Draw order holds until the next key. Replaces keys between the first and last given time.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				keys: z.array(z.object({ time: z.number().min(0), order: z.array(z.string()).optional() })).min(1),
+			},
+		},
+		(a) => edit(a.project, `draw order ${a.animation}`, (ws) => writeDrawOrderKeys(ws, a.animation, a.keys)),
+	);
+
+	server.registerTool(
+		"anim_sequence_keys",
+		{
+			description:
+				"Play an image sequence attachment (see sequence_import): from each key on, mode (hold, once, loop, pingpong, " +
+				"onceReverse, loopReverse, pingpongReverse; default hold), starting frame index (0-based) and delay " +
+				"(seconds per frame, e.g. 1/12). Replaces keys between the first and last given time.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				slot: z.string(),
+				attachment: z.string().optional().describe("Default: the slot's setup attachment"),
+				skin: z.string().optional(),
+				keys: z
+					.array(
+						z.object({
+							time: z.number().min(0),
+							mode: z.enum(SEQUENCE_MODES).optional(),
+							index: z.number().int().min(0).optional(),
+							delay: z.number().min(0).optional(),
+						}),
+					)
+					.min(1),
+			},
+		},
+		(a) =>
+			edit(a.project, `sequence keys ${a.animation} ${a.slot}`, (ws) =>
+				writeSequenceKeys(ws, a.animation, a.slot, a.attachment, a.keys, a.skin),
+			),
+	);
+
+	server.registerTool(
 		"anim_gait",
 		{
 			description:
 				"Walk or run cycle in place for IK feet (e.g. biped left-leg-target phase 0, right-leg-target phase 0.5). " +
-				"Planted feet slide back at constant speed; reports the ground speed to move the character at. " +
+				"Planted feet slide back at constant speed; reports the ground speed to move the character at and when each " +
+				"foot lands (event keys a footstep event there, string = foot bone). " +
 				"Walk: contact ~0.6, run: ~0.35 with more lift and bob.",
 			inputSchema: {
 				project,
@@ -662,6 +981,7 @@ export function createServer(): McpServer {
 				bob: z.number().min(0).optional(),
 				start: z.number().min(0).optional(),
 				cycles: z.number().int().min(1).max(20).optional(),
+				event: z.string().optional().describe("Event fired as each foot lands, e.g. footstep"),
 			},
 		},
 		(a) => edit(a.project, `gait ${a.animation}`, (ws) => gait(ws, a)),

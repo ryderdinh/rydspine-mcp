@@ -13,12 +13,12 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 | 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
 | 5. Kiểm tra & preview | ✅ Xong bản đầu | validate (kể cả mesh bị gập, ép dẹt, kéo giãn), kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio** |
 | 6. Chỉnh sửa | ✅ Xong bản đầu | Khóa, revert, sửa theo khoảng thời gian, so sánh phiên bản (`history_diff`), nhập lại JSON đã sửa trong Spine (`project_sync`) |
-| 7. Đầu ra & nghiệm thu | 🟡 Một phần | Bộ 6 asset nghiệm thu chạy tự động và đạt hết kiểm tra, nhưng dùng art tự vẽ. Chưa nghiệm thu trên art thật; chưa xác nhận Spine Editor mở được file xuất ra |
+| 7. Đầu ra & nghiệm thu | 🟡 Một phần | Bộ 6 asset nghiệm thu chạy tự động và đạt hết kiểm tra, nhưng dùng art tự vẽ. Spine Editor 4.3.26 đã import được hero. Chưa nghiệm thu trên art thật |
 
 ## Quyết định đã chốt
 
-- Spine Professional, nhưng **máy người dùng không được cài Spine**. MCP xuất JSON, atlas, PNG và HTML player. Người có Spine dùng File → Import Data để có file `.spine`.
-- Phiên bản Spine của người dùng: **4.3.75-beta**, lấy từ file coin. JSON mới tạo ghi đúng phiên bản này; đổi bằng biến `RYDSPINE_SPINE_VERSION`. Runtime npm mới nhất là 4.3.13 và đọc được JSON của 4.3.75-beta.
+- Spine Professional; người dùng đã có Spine trên máy. MCP xuất JSON, atlas, PNG và HTML player. Người có Spine dùng File → Import Data để có file `.spine`.
+- Phiên bản Spine Editor của người dùng: **4.3.26** (file coin mẫu được xuất bằng 4.3.75-beta). JSON mới tạo ghi 4.3.26 để Spine không cảnh báo lệch phiên bản; đổi bằng biến `RYDSPINE_SPINE_VERSION`. Runtime npm 4.3.13 đọc được cả hai.
 - Stack: TypeScript/Node, `@modelcontextprotocol/sdk`, `@esotericsoftware/spine-core` và `spine-player` 4.3.13.
 - Bảo mật: không lưu license; asset và workspace nằm ngoài git (`.gitignore`).
 
@@ -26,7 +26,7 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 
 - Runtime đích (web, Unity, Godot…).
 - Asset mẫu thật (được phép dùng) cho bộ nghiệm thu. Đã có: coin (mẫu chính thức của Spine). Người dùng không có PSD, nên tạm dùng art tự vẽ bằng code.
-- Nhờ người có Spine 4.3.75-beta mở một file JSON xuất ra bằng File → Import Data để xác nhận.
+- Kết quả phát animation của hero và dragon trong Spine Editor.
 
 ## Nhật ký
 
@@ -118,8 +118,14 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
   - từ chối ảnh sai tỉ lệ; `preview` chọn được skin.
 - Test: 30 test đạt.
 
+### 2026-10-31 (tiếp 2)
+- Đã merge đợt trước ([ryderdinh/rydspine-mcp#3](https://github.com/ryderdinh/rydspine-mcp/pull/3)).
+- `export` kèm thư mục `images/` cạnh file JSON, để Spine Editor (Import Data) tìm thấy hình.
+- Người dùng import `hero.json` vào Spine Editor 4.3.26: thành công, hình và xương đúng chỗ. Chỉ có cảnh báo lệch phiên bản (file ghi 4.3.75-beta) → đổi phiên bản mặc định thành 4.3.26.
+- Test: 30 test đạt.
+
 ## Việc tiếp theo
 
-1. Nghiệm thu trên art thật khi có asset, và xác nhận Spine Editor nhập được JSON xuất ra.
+1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
 2. Hỗ trợ thêm khi đọc `.skel`: transform/path/slider constraint, chuỗi ảnh.
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

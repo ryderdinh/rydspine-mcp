@@ -12,6 +12,7 @@ Cần Node 20+.
 
 ```bash
 npm install
+npx playwright install chromium   # cho ảnh preview PNG và test trang player
 npm test
 ```
 

@@ -202,9 +202,9 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Máy Mac của người dùng có Spine: `SPINE_CLI=/Applications/Spine.app/Contents/MacOS/Spine npm run spine:check` chạy được.
 - Asset nghiệm thu thứ 8 `crab` (cua): dựng từ PSD có marker pivot (nhóm tay → càng → kẹp), mesh có trọng số ở tay; `mirror_bones` tạo nửa phải; `mirror_animation` tạo `wave-right` (mirror) và `wave-swap` (swap). `spine:check` 8/8, cua lệch 0,0000 ở cả 3 animation; dải hình do Spine vẽ cho thấy `wave-right` là ảnh gương của `wave`.
 - Test: 45/49 đạt trên máy Mac. 4 test lỗi vì máy chưa cài gói `playwright` (cần cho preview PNG và trang player); trên `main` sạch cũng lỗi y như vậy.
+- `playwright` 1.64.1 thành devDependency (cài Chromium: `npx playwright install chromium`). Lỗi lộ ra sau đó: test trang player mất WebGL context (`getParameter` trả `null`) vì cờ cũ `--use-gl=swiftshader`. Trên Chromium 156 (macOS), cờ này hỏng khi đã có vài lần mở Chromium trước trong cùng tiến trình (do preview). Đổi sang `--use-angle=swiftshader`. Test: 49/49 đạt trên máy Mac.
 
 ## Việc tiếp theo
 
 1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
-2. Cài `playwright` làm devDependency (hiện chỉ `require` tuỳ chọn) để mọi test chạy được trên máy Mac.
-3. Tách ảnh phẳng thành bộ phận (để sau v1).
+2. Tách ảnh phẳng thành bộ phận (để sau v1).

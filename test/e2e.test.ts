@@ -197,7 +197,8 @@ describe("rydspine end to end", () => {
 		expect(r.text).toContain("exported");
 
 		const { chromium } = createRequire(import.meta.url)("playwright");
-		const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
+		// The older --use-gl=swiftshader loses the WebGL context once earlier previews have launched Chromium (Chromium 156, macOS).
+		const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 		try {
 			const page = await browser.newPage();
 			await page.goto(`file://${join(dir, "critter.html")}`);

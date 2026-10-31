@@ -633,9 +633,10 @@ export function createServer(): McpServer {
 		"mesh_generate",
 		{
 			description:
-				"Turn a region attachment into a mesh so it can bend. shape=contour (default) follows the image's opaque " +
-				"outline; shape=grid covers the whole rectangle. Give bones to weight it automatically by distance " +
-				"(bind the slot and place bones first).",
+				"Turn a region attachment into a mesh so it can bend, or rebuild an existing mesh (new outline or weights; " +
+				"refused if it has deform keys). shape=contour (default) follows the image's opaque outline; shape=grid " +
+				"covers the whole rectangle. Give bones to weight it automatically by distance (bind the slot and place " +
+				"bones first); smooth blends weights between neighboring bones so a sheet bends without tearing.",
 			inputSchema: {
 				project,
 				slot: z.string(),
@@ -648,6 +649,12 @@ export function createServer(): McpServer {
 				rows: z.number().int().min(1).max(32).optional().describe("grid rows (default 4)"),
 				bones: z.array(z.string()).optional(),
 				maxInfluences: z.number().int().min(1).max(4).optional(),
+				smooth: z
+					.number()
+					.min(0)
+					.max(2000)
+					.optional()
+					.describe("px over which weights blend between bones (default 0: nearest bone wins); ~the bone spacing for paper, cloth, ribbons"),
 			},
 		},
 		(args) =>

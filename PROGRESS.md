@@ -242,7 +242,19 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Thử trên ảnh cậu bé (nền trắng): 7981 pixel viền được tách; ghép lên nền tối thì hết viền răng cưa trắng quanh nét đen ở tóc và bàn tay, màu bên trong giữ nguyên.
 - Test mới cho viền pha 50%, mảng da chạm nền và `matte: 0`. 56/56 test qua.
 
+### 2026-10-31 (tiếp 14)
+
+- Thử trên art vé của người dùng (`~/Downloads/spine/Tickets`, không commit). Bản đầu tự nghĩ (vé bay vào, nổi, lật bằng `scaleX`) chưa đạt. Đọc file mẫu `Ticket.spine` (export JSON bằng Spine CLI, render khung bằng Spine) thì thấy kỹ thuật thật: vé trước là mesh chỉ có viền (50 đỉnh), gắn 6 xương dải dọc chiều dài, mỗi đỉnh 4–6 xương với trọng số trải rộng; từng xương lần lượt (cách nhau 2 frame) dời sang đầu kia và lật `scaleX` về -1 nên vé cuộn qua như trang giấy rồi cuộn về. Vé sau là mesh trên chuỗi xương uốn sóng, tối màu khi vé trước lật; bóng mờ đi; vé trước phóng to 1.78; vệt sáng vàng additive và bản sao additive chớp đỏ.
+- Dựng lại bằng tool rydspine (project `ticket-flip`): Spine render ra gần như trùng khung với mẫu. Khác còn lại: vệt sáng của mẫu là mesh kéo bằng deform, rydspine chưa có tool key deform nên dùng xoay/scale xương.
+- Ba lỗ hổng tool lộ ra và đã sửa:
+  - `mesh_generate` dựng lại được mesh đã có (khôi phục vị trí ảnh bằng khớp affine từ UV sang toạ độ setup); từ chối nếu mesh có key deform. Trước đây phải revert và mất hết animation.
+  - `mesh_generate` thêm `smooth` (px): trọng số trải giữa các xương lân cận (`1/(d²+smooth²)`). Mặc định 0 giữ như cũ (mỗi đỉnh gần như theo một xương), làm giấy/vải uốn bị rách răng cưa.
+  - `validate` không còn coi là lỗi khi mesh gập lúc có xương lật gương (lật trang có chủ ý): ghi "turns over" vào info. Gập do xoay quá tay vẫn là lỗi.
+- Test mới `test/mesh.test.ts` (dựng lại giữ chỗ, smooth trải trọng số, lật trang qua validate). 57/57 test qua.
+
 ## Việc tiếp theo
+
+1. Tool key deform cho mesh (vệt sáng kéo dài như mẫu vé) và cho phép key `scale` cả hai trục một lệnh.
 
 2. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
 3. Tách ảnh phẳng: đã có bản đầu và đã khử quầng viền. Có thể làm tiếp: AI gợi ý polygon tự động, vẽ bù tốt hơn (inpaint bằng model ảnh).

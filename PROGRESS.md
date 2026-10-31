@@ -8,12 +8,12 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 |---|---|---|
 | 0. Spike & chốt | ✅ Xong (trừ Spine CLI) | Runtime 4.3 chạy headless. Bỏ Spine CLI khỏi v1 vì máy người dùng không được cài Spine |
 | 1. Lõi | ✅ Xong bản đầu | MCP server, workspace, lịch sử phiên bản, validate, export |
-| 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận), project Spine 4.3 có sẵn dạng JSON hoặc binary `.skel`. Ảnh phẳng chưa tách bộ phận để sau v1 |
+| 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận, layer `[pivot]` → xương), project Spine 4.3 có sẵn dạng JSON hoặc binary `.skel`. Ảnh phẳng chưa tách bộ phận để sau v1 |
 | 3. Rig | ✅ Xong bản đầu | Bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân), skin (bộ trang phục, biến thể) |
 | 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
 | 5. Kiểm tra & preview | ✅ Xong bản đầu | validate (kể cả mesh bị gập, ép dẹt, kéo giãn), kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio** |
 | 6. Chỉnh sửa | ✅ Xong bản đầu | Khóa, revert, sửa theo khoảng thời gian, so sánh phiên bản (`history_diff`), nhập lại JSON đã sửa trong Spine (`project_sync`) |
-| 7. Đầu ra & nghiệm thu | 🟡 Một phần | Bộ 6 asset nghiệm thu chạy tự động và đạt hết kiểm tra, nhưng dùng art tự vẽ. Cả 6 asset đã qua vòng Spine Editor 4.3.26 thật (`npm run spine:check`). Chưa nghiệm thu trên art thật |
+| 7. Đầu ra & nghiệm thu | 🟡 Gần xong | Bộ 8 asset nghiệm thu (art tự vẽ) chạy tự động và đạt hết kiểm tra. Cả 8 asset đã qua vòng Spine Editor 4.3.26 thật (`npm run spine:check`), chạy được cả trên máy Mac của người dùng. Đã nghiệm thu trên art thật (rồng của Spine, `npm run real:art`); còn chờ art của người dùng |
 
 ## Quyết định đã chốt
 
@@ -192,8 +192,42 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Asset nghiệm thu: `tree` có dây leo treo trên nhánh, path gắn vào nhánh và xương đầu dây; `chest` có point `coin-spawn` trên nắp, vùng va chạm dò theo thân rương và clipping cho quầng sáng.
 - Test: 44 test đạt. `spine:check` 7/7, lệch ≤ 0,0011.
 
+### 2026-10-31 (tiếp 9)
+
+- `psd_import` đọc layer đánh dấu pivot:
+  - layer `<tên>[pivot]` (chấm nhỏ, không phân biệt hoa thường, ẩn cũng được) không thành hình; tại tâm của nó, rydspine tạo xương cho layer hoặc nhóm `<tên>` nằm cạnh;
+  - `[pivot]` (hoặc `<tên nhóm>[pivot]`) nằm trong nhóm là xương của nhóm;
+  - xương lồng nhau theo nhóm PSD; bộ phận không có pivot riêng thì gắn vào xương của nhóm gần nhất, hình giữ nguyên vị trí;
+  - marker không khớp layer nào, hoặc bị trùng, được liệt kê ở phần bỏ qua; không có marker thì kết quả như cũ.
+- Máy Mac của người dùng có Spine: `SPINE_CLI=/Applications/Spine.app/Contents/MacOS/Spine npm run spine:check` chạy được.
+- Asset nghiệm thu thứ 8 `crab` (cua): dựng từ PSD có marker pivot (nhóm tay → càng → kẹp), mesh có trọng số ở tay; `mirror_bones` tạo nửa phải; `mirror_animation` tạo `wave-right` (mirror) và `wave-swap` (swap). `spine:check` 8/8, cua lệch 0,0000 ở cả 3 animation; dải hình do Spine vẽ cho thấy `wave-right` là ảnh gương của `wave`.
+- Test: 45/49 đạt trên máy Mac. 4 test lỗi vì máy chưa cài gói `playwright` (cần cho preview PNG và trang player); trên `main` sạch cũng lỗi y như vậy.
+- `playwright` 1.64.1 thành devDependency (cài Chromium: `npx playwright install chromium`). Lỗi lộ ra sau đó: test trang player mất WebGL context (`getParameter` trả `null`) vì cờ cũ `--use-gl=swiftshader`. Trên Chromium 156 (macOS), cờ này hỏng khi đã có vài lần mở Chromium trước trong cùng tiến trình (do preview). Đổi sang `--use-angle=swiftshader`. Test: 49/49 đạt trên máy Mac.
+
+### 2026-10-31 (tiếp 10)
+
+- Nghiệm thu trên art thật: `npm run real:art` (`acceptance/real-art.ts`) dùng con rồng trong bộ ví dụ của Spine (art của Thiago Brayner; giấy phép chỉ cho trình diễn, không phát tán, không làm tác phẩm phái sinh, nên chỉ tải vào `~/.cache/rydspine/spine-art`, kết quả nằm trong `acceptance/out/`).
+  - Bộ ví dụ không có PSD, nên script dựng PSD giống file họa sĩ giao: 30 bộ phận vẽ đúng chỗ (xoay như tư thế setup gốc), layer phẳng theo thứ tự vẽ, chấm `<phần>[pivot]` ẩn ở mỗi khớp; cánh là chuỗi 9 frame.
+  - Chỉ dùng tool MCP: `psd_import`, `bone_add` (khớp không có hình), `bone_update` (cây xương, hướng và độ dài), `sequence_import` cho cánh, physics cho đuôi, animation `fly` 0,9 s (cánh lặp 9 frame, thân nhún, cổ/đầu/hàm/chân/đuôi lệch pha).
+  - Kết quả: tư thế setup trùng bản gốc 99,99% vùng đặc, lệch màu trung bình 0,31/255; 32 xương nằm đúng khớp (lệch ≤ 0,63 px vì chấm pivot là số nguyên) và đúng hướng (≤ 0,005°); validate đạt, vòng lặp khớp; qua Spine Editor lệch 0,0000.
+- Thiếu sót lộ ra nhờ art thật: xương tạo từ pivot dài 0, góc 0, nên physics `rotate` không có tác dụng; đổi góc xương thì kéo hình và xương con theo. Thêm `bone_update` `compensate: true` (như "Compensate" của Spine Editor): hình (region, mesh không trọng số) và xương con giữ nguyên chỗ khi xương dời hoặc xoay; từ chối khi đổi scale (region không biểu diễn được kéo giãn theo trục xoay). Test `test/compensate.test.ts`.
+- `spine-check.ts` tách hàm `roundTrip` dùng chung.
+- Test: 50/50 đạt.
+
+### 2026-10-31 (tiếp 11)
+
+- Bộ cài cho người khác (không cần biết dòng lệnh): trang `docs/index.html` (bật GitHub Pages thư mục `docs/`) có nút tải bộ cài theo hệ điều hành.
+  - macOS/Linux: `rydspine-setup-mac.zip` chứa `rydspine-setup.command` (zip để giữ quyền chạy; tải thẳng thì mất). Windows: `rydspine-setup-windows.bat`. Nguồn ở `installer/`, đóng gói bằng `npm run installers`.
+  - Bộ cài kiểm tra Node 20+, tải mã nguồn bằng `curl` + `tar` (không cần git) vào `~/.rydspine/app`, `npm install --omit=dev`, rồi chạy trình cài đặt `src/setup.ts` (`npm run setup`).
+  - `src/setup.ts`: hỏi từng app có trên máy rồi ghi cấu hình MCP bằng đường dẫn tuyệt đối (app GUI không thấy PATH của nvm): Claude Code (`claude mcp add -s user`, chép skill `spine-rigging`), Claude Desktop (`claude_desktop_config.json`, sao lưu trước), Codex (`codex mcp add`); hỏi tải Chromium cho preview PNG; dò Spine Editor; cuối cùng chạy server và đếm tool. Dự án lưu ở `~/.rydspine/workspaces`. Cờ `--yes`, `--clients=`, `--no-chromium`, `--home=<thư mục>` (chạy thử không đụng cấu hình thật).
+  - `tsx` và `playwright` chuyển sang `dependencies` vì máy người dùng chạy server bằng tsx và preview cần playwright.
+  - Đã thử trọn quy trình trên Mac (từ file zip giải nén bằng `ditto` như Safari, cài vào thư mục tạm): cả 3 app ghi đúng cấu hình, server chạy với 46 tool. Bộ cài Windows chưa chạy thử trên máy Windows.
+- Chặn: repo đang private, nên bộ cài (tải từ `codeload.github.com`) và GitHub Pages chỉ chạy khi repo chuyển public. Trước đó thử bằng `RYDSPINE_SOURCE=<repo>`.
+- Demo trong phiên (không commit, art do Codex vẽ): robot vẫy tay (IK, chuỗi ăng-ten, physics), tấm vải bị kéo lên (mesh nhiều xương + physics; validate bắt mesh gập và đã chỉnh), rèm cuốn từng nấc (clipping đi theo cuộn rèm, event `notch`).
+- Test: 50/50 đạt.
+
 ## Việc tiếp theo
 
-1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
-2. Pivot theo layer `[pivot]` khi import PSD (ý tưởng từ `REFERENCES.md`); nghiệm thu `mirror_*` qua Spine (`spine:check`).
+1. Chuyển repo sang public, bật GitHub Pages (`docs/`), thử bộ cài thật trên một máy Mac và một máy Windows khác.
+2. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

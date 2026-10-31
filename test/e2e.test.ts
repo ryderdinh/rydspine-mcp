@@ -197,7 +197,8 @@ describe("rydspine end to end", () => {
 		expect(r.text).toContain("exported");
 
 		const { chromium } = createRequire(import.meta.url)("playwright");
-		const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
+		// The older --use-gl=swiftshader loses the WebGL context once earlier previews have launched Chromium (Chromium 156, macOS).
+		const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 		try {
 			const page = await browser.newPage();
 			await page.goto(`file://${join(dir, "critter.html")}`);
@@ -324,5 +325,57 @@ describe("PSD import", () => {
 		const groups = await ok("psd_import", { project: "hero", psd: file, keepGroups: true, includeHidden: true });
 		expect(groups.text).toContain("body/torso");
 		expect(Workspace.open("hero").doc.slots.find((s) => s.name === "sketch-2")?.attachment).toBeUndefined();
+	});
+
+	it("turns [pivot] marker layers into bones nested like the groups", async () => {
+		const file = join(root, "arm.psd");
+		const dot = (name: string, cx: number, cy: number, extra: object = {}) =>
+			layer(name, cx - 2, cy - 2, 4, 4, [255, 0, 255, 255], extra);
+		const psd = {
+			width: 200,
+			height: 300,
+			children: [
+				layer("torso", 60, 80, 80, 110, [200, 60, 60, 255]),
+				dot("torso [Pivot]", 100, 180, { hidden: true }),
+				{
+					name: "arm",
+					children: [
+						layer("upper", 130, 90, 20, 50, [10, 10, 10, 255]),
+						dot("upper[pivot]", 140, 92),
+						{
+							name: "fore arm",
+							children: [layer("lower", 130, 140, 20, 50, [20, 20, 20, 255]), dot("[pivot]", 140, 142)],
+						},
+						layer("hand", 128, 190, 24, 20, [30, 30, 30, 255]),
+					],
+				},
+				dot("arm[pivot]", 140, 90),
+				dot("tail[pivot]", 0, 0),
+			],
+		};
+		writeFileSync(file, writePsdBuffer(psd as never));
+
+		await ok("project_create", { name: "armed" });
+		const r = await ok("psd_import", { project: "armed", psd: file });
+		expect(r.text).toContain("4 parts");
+		expect(r.text).toMatch(/tail\[pivot\] \(pivot marker: no layer or group named "tail"/);
+
+		const ws = Workspace.open("armed");
+		const bones = Object.fromEntries(ws.doc.bones.map((b) => [b.name, b]));
+		expect(Object.keys(bones)).toEqual(["root", "torso", "arm", "upper", "fore_arm"]);
+		// Bottom-center origin: PSD (140, 90) is world (40, 210); children are local to their parent bone.
+		expect(bones.torso).toMatchObject({ parent: "root", y: 120 });
+		expect(bones.arm).toMatchObject({ parent: "root", x: 40, y: 210 });
+		expect(bones.upper).toMatchObject({ parent: "arm", y: -2 });
+		expect(bones.fore_arm).toMatchObject({ parent: "arm", y: -52 });
+		const slotBone = Object.fromEntries(ws.doc.slots.map((s) => [s.name, s.bone]));
+		expect(slotBone).toEqual({ torso: "torso", upper: "upper", lower: "fore_arm", hand: "arm" });
+		expect(ws.doc.slots.map((s) => s.name)).toEqual(["torso", "upper", "lower", "hand"]);
+
+		// Images stay where they were drawn: the hand (PSD center 140, 200) is at world (40, 100).
+		const hand = ws.doc.skins[0].attachments.hand.hand;
+		expect(hand).toMatchObject({ y: -110 });
+		expect(hand.x).toBeUndefined();
+		await ok("validate", { project: "armed" });
 	});
 });

@@ -1,7 +1,9 @@
-// Acceptance suite: builds the six reference assets from REQUIREMENTS.md §5 (plus a lantern for constraint and sequence timelines) entirely through the MCP
+// Acceptance suite: builds the six reference assets from REQUIREMENTS.md §5 (plus a lantern for constraint and sequence timelines, and a crab for PSD pivots and mirroring) entirely through the MCP
 // tools, then validates, previews and exports each one.
 // Usage: npx tsx acceptance/build.ts [outDir]   (default acceptance/out)
-import { cpSync, mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { writePsdBuffer } from "ag-psd";
+import { PNG } from "pngjs";
 import { join, resolve } from "node:path";
 import { connect, type Result } from "../test/helpers.js";
 import { collect, render } from "../src/ui.js";
@@ -456,7 +458,84 @@ async function lantern(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	return r;
 }
 
-export const ASSETS = { hero, dragon, tree, chest, car, logo, lantern };
+/** A PSD pixel layer painted from a polygon in world coordinates, on a canvas whose origin is bottom-center. */
+function psdLayer(paint: Painter, canvas: { width: number; height: number }, name: string, world: Pt[], color: RGB) {
+	const p = part(paint, name, world, color);
+	const png = PNG.sync.read(readFileSync(p.path));
+	const left = Math.round(p.x - png.width / 2 + canvas.width / 2);
+	const top = Math.round(canvas.height - (p.y + png.height / 2));
+	const data = new Uint8ClampedArray(png.data.buffer, png.data.byteOffset, png.data.byteLength);
+	return { name, left, top, right: left + png.width, bottom: top + png.height, imageData: { width: png.width, height: png.height, data } };
+}
+
+/** A 4x4 "[pivot]" marker dot centered on a world point; artists usually hide these. */
+function pivotLayer(canvas: { width: number; height: number }, name: string, [x, y]: Pt) {
+	const data = new Uint8ClampedArray(64).fill(255);
+	const left = x + canvas.width / 2 - 2;
+	const top = canvas.height - y - 2;
+	return { name, left, top, right: left + 4, bottom: top + 4, hidden: true, imageData: { width: 4, height: 4, data } };
+}
+
+async function crab(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
+	const project = "crab";
+	const r: AssetReport = {
+		project,
+		title: "Cua",
+		prompt: "Cua nhìn thẳng, vẫy càng trái rồi càng phải. Dựng từ PSD có layer [pivot]; nửa phải tạo bằng mirror.",
+		animations: ["wave", "wave-right", "wave-swap"],
+		checks: [],
+	};
+	await ok("project_create", { name: project });
+	// Only the left side is drawn; the PSD groups and their [pivot] markers become the bone tree.
+	const canvas = { width: 400, height: 260 };
+	const L = (name: string, world: Pt[], color: RGB) => psdLayer(paint, canvas, name, world, color);
+	const shell: RGB = [220, 90, 60];
+	const psd = {
+		...canvas,
+		children: [
+			{
+				name: "left-arm",
+				children: [
+					L("left-upper", strip([-60, 70], [-120, 130], 22, 16), shell),
+					pivotLayer(canvas, "[pivot]", [-60, 70]),
+					{
+						name: "left-claw",
+						children: [
+							L("left-hand", [[-136, 122], [-104, 122], [-100, 150], [-112, 196], [-140, 170]], shell),
+							L("left-pincer", [[-104, 140], [-88, 146], [-86, 178], [-98, 196], [-102, 160]], [235, 120, 80]),
+							pivotLayer(canvas, "left-pincer [pivot]", [-102, 142]),
+						],
+					},
+					pivotLayer(canvas, "left-claw[pivot]", [-120, 130]),
+				],
+			},
+			L("left-eye", [[-26, 90], [-14, 90], [-14, 118], [-10, 124], [-20, 134], [-30, 124], [-26, 118]], [240, 230, 210]),
+			pivotLayer(canvas, "left-eye[pivot]", [-20, 90]),
+			L("body", ellipsePts(0, 60, 80, 44), shell),
+			pivotLayer(canvas, "body[pivot]", [0, 40]),
+		],
+	};
+	const file = join(paint.dir, "crab.psd");
+	writeFileSync(file, writePsdBuffer(psd as never));
+	const imported = await ok("psd_import", { project, psd: file });
+	r.checks.push({ name: "PSD pivots", ok: /left-pincer \(parent left-claw\)/.test(imported.text), detail: imported.text });
+	for (const bone of ["left-arm", "left-eye"]) await ok("bone_update", { project, name: bone, parent: "body" });
+	await ok("mesh_generate", { project, slot: "left-upper", bones: ["left-arm", "left-claw"] });
+	await ok("mirror_bones", { project, bones: ["left-arm", "left-eye"], axis: 0 });
+
+	await ok("anim_create", { project, name: "wave", loop: true });
+	await ok("anim_oscillate", { project, animation: "wave", bones: ["body"], property: "translatey", amplitude: 3, period: 0.5, end: 1 });
+	await ok("anim_oscillate", { project, animation: "wave", bones: ["left-arm"], property: "rotate", amplitude: 18, period: 1, end: 1 });
+	await ok("anim_oscillate", { project, animation: "wave", bones: ["left-claw"], property: "rotate", amplitude: 12, period: 1, end: 1, phase: 0.15 });
+	await ok("anim_oscillate", { project, animation: "wave", bones: ["left-pincer"], property: "rotate", amplitude: 15, period: 0.25, end: 1 });
+	await ok("anim_oscillate", { project, animation: "wave", bones: ["left-eye"], property: "rotate", amplitude: 6, period: 0.5, end: 1, phase: 0.3 });
+	await ok("mirror_animation", { project, animation: "wave", to: "wave-right", mode: "mirror" });
+	await ok("mirror_animation", { project, animation: "wave", to: "wave-swap", mode: "swap" });
+	await validated(ok, call, project, r);
+	return r;
+}
+
+export const ASSETS = { hero, dragon, tree, chest, car, logo, lantern, crab };
 
 export async function buildAll(outDir: string): Promise<AssetReport[]> {
 	const { root, ok, call } = await connect();
@@ -478,7 +557,7 @@ export async function buildAll(outDir: string): Promise<AssetReport[]> {
 	writeFileSync(join(outDir, "report.json"), `${JSON.stringify(reports, null, 2)}\n`);
 	// The studio page for these assets; studio.html is the fragment for publishing, studio-local.html opens directly.
 	const extras = Object.fromEntries(reports.map((r) => [r.project, r]));
-	const subtitle = "Seven acceptance assets, rigged and animated through the rydspine MCP tools";
+	const subtitle = "Eight acceptance assets, rigged and animated through the rydspine MCP tools";
 	writeFileSync(join(outDir, "studio.html"), render(collect(extras), { player: "cdn", document: false, subtitle }));
 	writeFileSync(join(outDir, "studio-local.html"), render(collect(extras), { player: "cdn", document: true, subtitle }));
 	return reports;

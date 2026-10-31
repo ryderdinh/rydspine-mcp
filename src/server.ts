@@ -453,11 +453,53 @@ export function createServer(): McpServer {
 			})
 			.loose()
 			.describe("Secondary motion (hair, tails, antennae): set rotate to 1 for rotational follow"),
+		z
+			.object({
+				type: z.literal("path"),
+				name: z.string(),
+				bones: z.array(z.string()).min(1).describe("bones laid along the path, parents first (e.g. a chain from rig_template)"),
+				points: z
+					.array(point)
+					.min(2)
+					.optional()
+					.describe("world points the path passes through, read off the art; creates slot <name>-path with a smooth path"),
+				closed: z.boolean().optional().describe("loop the path (treads, conveyor belts)"),
+				pathBone: z.string().optional().describe("bone the new path slot follows (default root); bones on it bend the path"),
+				slot: z.string().optional().describe("existing slot holding a path attachment, instead of points"),
+				positionMode: z.enum(["percent", "fixed"]).optional(),
+				spacingMode: z.enum(["length", "fixed", "percent", "proportional"]).optional(),
+				rotateMode: z.enum(["tangent", "chain", "chainScale"]).optional(),
+				position: z.number().optional(),
+				spacing: z.number().optional(),
+				mixRotate: mix,
+				mixX: mix,
+				mixY: mix,
+			})
+			.loose()
+			.describe("Bones follow a curve: rubber limbs (percent spacing, chainScale), chains and treads (length spacing, chain); animate position to slide along it"),
+		z
+			.object({
+				type: z.literal("slider"),
+				name: z.string(),
+				animation: z.string().describe("existing animation the slider plays (create it first)"),
+				time: z.number().optional().describe("setup time in seconds when no bone drives the slider"),
+				bone: z.string().optional().describe("drive the time from this bone's property (a control bone)"),
+				property: z.enum(["rotate", "x", "y", "scaleX", "scaleY", "shearY"]).optional(),
+				from: z.number().optional().describe("property value that maps to time `to`"),
+				to: z.number().optional(),
+				scale: z.number().optional().describe("seconds per unit of the property (e.g. 1/360 for one turn per second)"),
+				local: z.boolean().optional(),
+				loop: z.boolean().optional(),
+				additive: z.boolean().optional(),
+				mix,
+			})
+			.loose()
+			.describe("Pose an animation by a value: a dial, a facial expression blend, a turn-around sheet"),
 	]);
 
 	server.registerTool(
 		"constraint_add",
-		{ description: "Add an IK, transform or physics constraint.", inputSchema: { project, constraint } },
+		{ description: "Add an IK, transform, path, physics or slider constraint.", inputSchema: { project, constraint } },
 		({ project, constraint }) =>
 			edit(project, `add ${constraint.type} ${constraint.name}`, (ws) => void addConstraint(ws, constraint as ConstraintJson)),
 	);
@@ -522,6 +564,8 @@ export function createServer(): McpServer {
 			edit(project, `remove animation ${name}`, (ws) => {
 				assertUnlocked(ws, "animations", [name]);
 				if (!ws.doc.animations[name]) throw new UserError(`animation "${name}" not found`);
+				const sliders = ws.doc.constraints.filter((c) => c.type === "slider" && c.animation === name);
+				if (sliders.length) throw new UserError(`animation "${name}" is played by slider ${sliders.map((c) => c.name).join(", ")}`);
 				delete ws.doc.animations[name];
 				delete ws.meta.loops[name];
 			}),

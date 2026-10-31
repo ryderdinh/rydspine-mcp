@@ -4,7 +4,7 @@ import { type BonePose, Vector2 } from "@esotericsoftware/spine-core";
 import { imageSize, readPng } from "./atlas.js";
 import { type ContourOptions, contourMesh } from "./contour.js";
 import { boneByName, load } from "./runtime.js";
-import type { BoneJson, ConstraintJson, MeshJson, RegionJson, SlotJson } from "./types.js";
+import type { AttachmentJson, BoneJson, ConstraintJson, MeshJson, RegionJson, SlotJson } from "./types.js";
 import { checkName, UserError, type Workspace } from "./workspace.js";
 
 export type Space = "local" | "world";
@@ -453,6 +453,53 @@ function weigh(ws: Workspace, slotBone: string, local: number[], boneNames: stri
 	return out;
 }
 
+/** Cumulative length of each bezier segment of a path, vertexCount/3 entries like Spine writes (the last closes the
+ * loop). The runtime reads them only when constantSpeed is false, and Spine recomputes them on import. */
+export function pathLengths(v: number[]): number[] {
+	const n = v.length / 6;
+	const out: number[] = [];
+	let total = 0;
+	for (let i = 0; i < n; i++) {
+		const j = (i + 1) % n;
+		const [x0, y0, x1, y1, x2, y2, x3, y3] = [v[i * 6 + 2], v[i * 6 + 3], v[i * 6 + 4], v[i * 6 + 5], v[j * 6], v[j * 6 + 1], v[j * 6 + 2], v[j * 6 + 3]];
+		let px = x0;
+		let py = y0;
+		for (let k = 1; k <= 64; k++) {
+			const t = k / 64;
+			const u = 1 - t;
+			const x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3;
+			const y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3;
+			total += Math.hypot(x - px, y - py);
+			px = x;
+			py = y;
+		}
+		out.push(Math.round(total * 1e4) / 1e4);
+	}
+	return out;
+}
+
+/** Smooth path through world points (Catmull-Rom handles), in the bone's local space: [in, point, out] per point. */
+function pathThrough(ws: Workspace, bone: string, points: { x: number; y: number }[], closed: boolean): number[] {
+	const frame = boneByName(load(ws).skeleton, bone).appliedPose;
+	const n = points.length;
+	const at = (i: number) => points[closed ? (i + n) % n : Math.max(0, Math.min(n - 1, i))];
+	const world: number[] = [];
+	points.forEach((p, i) => {
+		const [a, b] = [at(i - 1), at(i + 1)];
+		// One-sided at open ends; a third of the neighbour distance keeps the curve from overshooting.
+		const k = !closed && (i === 0 || i === n - 1) ? 1 / 3 : 1 / 6;
+		const tx = (b.x - a.x) * k;
+		const ty = (b.y - a.y) * k;
+		world.push(p.x - tx, p.y - ty, p.x, p.y, p.x + tx, p.y + ty);
+	});
+	const local: number[] = [];
+	for (let i = 0; i < world.length; i += 2) {
+		const q = frame.worldToLocal(new Vector2(world[i], world[i + 1]));
+		local.push(round(q.x), round(q.y));
+	}
+	return local;
+}
+
 export function addConstraint(ws: Workspace, c: ConstraintJson): ConstraintJson {
 	checkName("constraint", c.name);
 	if (ws.doc.constraints.some((x) => x.name === c.name)) throw new UserError(`constraint "${c.name}" already exists`);
@@ -461,6 +508,32 @@ export function addConstraint(ws: Workspace, c: ConstraintJson): ConstraintJson 
 		...["bone", "target", "source"].map((k) => c[k]).filter((v): v is string => typeof v === "string"),
 	];
 	for (const b of boneRefs) findBone(ws, b);
+	if (c.type === "path") {
+		const { points, closed, pathBone, ...rest } = c as ConstraintJson & { points?: { x: number; y: number }[]; closed?: boolean; pathBone?: string };
+		const slotName = (rest.slot as string | undefined) ?? `${c.name}-path`;
+		const existing = ws.doc.slots.find((s) => s.name === slotName);
+		if (points) {
+			if (existing) throw new UserError(`slot "${slotName}" already exists; give points only for a new path`);
+			if (points.length < 2) throw new UserError("a path needs at least 2 points");
+			const bone = pathBone ?? "root";
+			findBone(ws, bone);
+			const vertices = pathThrough(ws, bone, points, closed ?? false);
+			const path: AttachmentJson = { type: "path", vertexCount: vertices.length / 2, vertices, lengths: pathLengths(vertices) };
+			if (closed) path.closed = true;
+			ws.doc.slots.push({ name: slotName, bone, attachment: slotName });
+			(defaultSkin(ws).attachments[slotName] ??= {})[slotName] = path;
+		} else {
+			if (!existing) throw new UserError(`path slot "${slotName}" not found: give points to create it`);
+			const atts = ws.doc.skins.flatMap((sk) => Object.values(sk.attachments[slotName] ?? {}));
+			if (!atts.some((a) => a.type === "path")) throw new UserError(`slot "${slotName}" has no path attachment`);
+		}
+		c = { ...rest, slot: slotName } as ConstraintJson;
+	}
+	if (c.type === "slider") {
+		const animation = c.animation as string | undefined;
+		if (!animation || !ws.doc.animations[animation]) throw new UserError(`slider "${c.name}" needs an existing animation (got ${animation ?? "none"})`);
+		if (c.bone && !c.property) throw new UserError("a bone-driven slider needs property: rotate, x, y, scaleX, scaleY or shearY");
+	}
 	if (c.type === "ik") {
 		const bones = c.bones as string[];
 		if (bones.length < 1 || bones.length > 2) throw new UserError("ik takes 1 or 2 bones");

@@ -13,31 +13,17 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir, platform } from "node:os";
 import { join, resolve } from "node:path";
 import { PNG } from "pngjs";
-import {
-	type Attachment,
-	AtlasAttachmentLoader,
-	MeshAttachment,
-	MixFrom,
-	Physics,
-	RegionAttachment,
-	Skeleton,
-	type SkeletonData,
-	SkeletonJson,
-	TextureAtlas,
-	type TextureAtlasRegion,
-} from "@esotericsoftware/spine-core";
+import { SkeletonJson } from "@esotericsoftware/spine-core";
 import { buildAll } from "./build.js";
+import { type Compared, compareAnimation, compareStructure, FPS, PlaceholderLoader } from "./compare.js";
 
 const SPINE_VERSION = process.env.RYDSPINE_SPINE_VERSION ?? "4.3.26";
-const FPS = 30;
-/** Spine writes floats with fewer digits than the runtime keeps; anything below this is rounding. */
-const TOLERANCE = 0.05;
 
 const secret = process.env.SPINE_ACTIVATION_CODE ?? "";
 const redact = (s: string) => (secret ? s.split(secret).join("<code>") : s);
 
 /** Finds or installs the Spine launcher. Returns null when Spine is not available. */
-function launcher(): string[] | null {
+export function launcher(): string[] | null {
 	if (process.env.SPINE_CLI) return [process.env.SPINE_CLI];
 	if (!secret || platform() !== "linux") return null;
 	const dir = join(homedir(), ".cache", "rydspine", "spine");
@@ -56,7 +42,7 @@ function launcher(): string[] | null {
 }
 
 /** Runs one Spine CLI command headless. The activation code goes in on stdin the first time Spine asks for it. */
-function spine(base: string[], args: string[]): string {
+export function spine(base: string[], args: string[]): string {
 	const extra: string[] = ["-u", SPINE_VERSION];
 	const proxy = process.env.HTTPS_PROXY ?? process.env.https_proxy;
 	if (proxy) extra.push("-x", new URL(proxy).host);
@@ -68,150 +54,8 @@ function spine(base: string[], args: string[]): string {
 	return out;
 }
 
-/** Every attachment gets the same 1x1 region: the comparison needs geometry, not pixels. */
-class PlaceholderLoader extends AtlasAttachmentLoader {
-	private readonly region: TextureAtlasRegion;
-	constructor() {
-		const atlas = new TextureAtlas("placeholder.png\nsize:1,1\nfilter:Linear,Linear\nplaceholder\nbounds:0,0,1,1\n");
-		super(atlas);
-		this.region = atlas.regions[0];
-	}
-	protected findRegion(): TextureAtlasRegion {
-		return this.region;
-	}
-}
-
+/** Reads a JSON export with placeholder regions. */
 const read = (file: string) => new SkeletonJson(new PlaceholderLoader()).readSkeletonData(JSON.parse(readFileSync(file, "utf8")));
-
-function worldVertices(skeleton: Skeleton, slotIndex: number, att: Attachment | null): number[] {
-	const slot = skeleton.slots[slotIndex];
-	if (att instanceof RegionAttachment) {
-		const v = new Array<number>(8);
-		att.computeWorldVertices(slot, att.getOffsets(slot.appliedPose), v, 0, 2);
-		return v;
-	}
-	if (att instanceof MeshAttachment) {
-		const v = new Array<number>(att.worldVerticesLength);
-		att.computeWorldVertices(skeleton, slot, 0, att.worldVerticesLength, v, 0, 2);
-		return v;
-	}
-	return [];
-}
-
-interface Pose {
-	values: number[];
-	labels: string[];
-	attachments: (string | null)[];
-	order: string[];
-}
-
-function pose(skeleton: Skeleton): Pose {
-	const values: number[] = [];
-	const labels: string[] = [];
-	for (const b of skeleton.bones) {
-		const p = b.appliedPose;
-		for (const [k, v] of Object.entries({ x: p.worldX, y: p.worldY, a: p.a, b: p.b, c: p.c, d: p.d })) {
-			values.push(k === "x" || k === "y" ? v : v * 100);
-			labels.push(`bone ${b.data.name} ${k}`);
-		}
-	}
-	const attachments: (string | null)[] = [];
-	skeleton.slots.forEach((s, i) => {
-		const att = s.appliedPose.getAttachment();
-		attachments.push(att?.name ?? null);
-		const c = s.appliedPose.color;
-		for (const [k, v] of Object.entries({ r: c.r, g: c.g, b: c.b, a: c.a })) {
-			values.push(v * 100);
-			labels.push(`slot ${s.data.name} ${k}`);
-		}
-		worldVertices(skeleton, i, att).forEach((v, j) => {
-			values.push(v);
-			labels.push(`slot ${s.data.name} vertex ${j >> 1}`);
-		});
-	});
-	return { values, labels, attachments, order: skeleton.drawOrder.appliedPose.map((s) => s.data.name) };
-}
-
-interface Compared {
-	asset: string;
-	animation: string;
-	frames: number;
-	worst: number;
-	where: string;
-	problems: string[];
-}
-
-/** Plays one animation in both skeletons, frame by frame, with physics. */
-function compareAnimation(asset: string, a: SkeletonData, b: SkeletonData, name: string): Compared {
-	const out: Compared = { asset, animation: name, frames: 0, worst: 0, where: "", problems: [] };
-	const animA = a.findAnimation(name);
-	const animB = b.findAnimation(name);
-	if (!animA || !animB) {
-		out.problems.push("animation missing after the round trip");
-		return out;
-	}
-	if (Math.abs(animA.duration - animB.duration) > 1e-3) out.problems.push(`duration ${animA.duration} became ${animB.duration}`);
-	const sa = new Skeleton(a);
-	const sb = new Skeleton(b);
-	const frames = Math.round(animA.duration * FPS);
-	for (let i = 0; i <= frames; i++) {
-		const t = Math.min(i / FPS, animA.duration);
-		const poses = ([
-			[sa, animA],
-			[sb, animB],
-		] as const).map(([s, anim]) => {
-			s.setupPose();
-			anim.apply(s, t, t, false, null, 1, MixFrom.current, false, false, false);
-			if (i > 0) s.update(1 / FPS);
-			s.updateWorldTransform(i === 0 ? Physics.reset : Physics.update);
-			return pose(s);
-		});
-		const [pa, pb] = poses;
-		out.frames++;
-		if (pa.values.length !== pb.values.length) {
-			out.problems.push(`frame ${i}: pose has ${pa.values.length} values, ${pb.values.length} after the round trip`);
-			break;
-		}
-		pa.values.forEach((v, k) => {
-			const d = Math.abs(v - pb.values[k]);
-			if (d > out.worst) {
-				out.worst = d;
-				out.where = `${pa.labels[k]} at frame ${i}`;
-			}
-		});
-		if (pa.attachments.join() !== pb.attachments.join()) out.problems.push(`frame ${i}: visible attachments differ`);
-		if (pa.order.join() !== pb.order.join()) out.problems.push(`frame ${i}: draw order differs`);
-		if (out.problems.length > 5) break;
-	}
-	if (out.worst > TOLERANCE) out.problems.push(`max difference ${out.worst.toFixed(3)} (${out.where})`);
-	return out;
-}
-
-function compareStructure(a: SkeletonData, b: SkeletonData): string[] {
-	const problems: string[] = [];
-	const names = (label: string, x: { name: string }[], y: { name: string }[]) => {
-		const [p, q] = [x.map((e) => e.name).join(", "), y.map((e) => e.name).join(", ")];
-		if (p !== q) problems.push(`${label}: [${p}] became [${q}]`);
-	};
-	names("bones", a.bones, b.bones);
-	names("slots", a.slots, b.slots);
-	names("constraints", a.constraints, b.constraints);
-	names("skins", a.skins, b.skins);
-	names("animations", a.animations, b.animations);
-	names("events", a.events, b.events);
-	for (const skin of a.skins) {
-		const other = b.findSkin(skin.name);
-		if (!other) continue;
-		const list = (s: typeof skin) =>
-			s
-				.getAttachments()
-				.map((e) => `${a.slots[e.slotIndex].name}/${e.placeholder}:${e.attachment.constructor.name}`)
-				.sort()
-				.join(", ");
-		if (list(skin) !== list(other)) problems.push(`skin ${skin.name}: attachments differ`);
-	}
-	return problems;
-}
 
 /** PNG sequence settings, as the Export dialog saves them; Spine needs OpenGL (Xvfb with Mesa on Linux). */
 function pngSettings(skeleton: string, animation: string) {
@@ -267,7 +111,13 @@ function renderSheets(base: string[], project: string, skeleton: string, animati
 		const settings = join(dir, `png-${animation}.export.json`);
 		writeFileSync(settings, JSON.stringify(pngSettings(skeleton, animation), null, 1));
 		// Spine treats the output as a file prefix: frames/<animation>/f_00.png, f_01.png, ...
-		spine(base, ["-i", project, "-o", join(frames, "f"), "-e", settings]);
+		const args = ["-i", project, "-o", join(frames, "f"), "-e", settings];
+		try {
+			spine(base, args);
+		} catch {
+			// Image export through Xvfb fails now and then for no reason it reports; a second run succeeds.
+			spine(base, args);
+		}
 		const files = readdirSync(frames)
 			.filter((f) => f.endsWith(".png"))
 			.sort()
@@ -315,7 +165,8 @@ export async function spineCheck(outDir: string): Promise<SpineCheck[] | null> {
 		try {
 			sheets = renderSheets(base, project, r.project, r.animations, dir);
 		} catch (e) {
-			problems.push(`image export: ${(e as Error).message.split("\n").slice(0, 3).join(" ")}`);
+			// The reason is at the end of Spine's output, after the launcher banner.
+			problems.push(`image export: ${(e as Error).message.split("\n").filter(Boolean).slice(-4).join(" | ")}`);
 		}
 		results.push({ asset: r.project, ok: problems.length === 0, problems, animations, sheets, log });
 	}

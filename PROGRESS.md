@@ -141,8 +141,25 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Kết quả: cả 6 asset đạt, lệch tối đa 0,0011 px; dải hình do Spine vẽ đúng ý đồ.
 - Test nghiệm thu kiểm thêm 3 quy tắc trên (test hỏng nếu bỏ phần sửa). Test: 30 test đạt.
 
+### 2026-10-31 (tiếp 4)
+- `.skel` giờ đọc được transform, path và slider constraint, chuỗi ảnh (region và mesh), cùng các timeline của chúng; linked mesh lấy nguồn từ slot khác ghi thêm `slot`.
+- Kiểm bằng bộ ví dụ chính thức (`github.com/EsotericSoftware/spine-runtimes`, nhánh 4.3, 44 file `.skel`). Script mới `npm run skel:examples` tải thưa thư mục `examples/*/export` vào `~/.cache/rydspine/spine-runtimes`, chuyển từng file rồi so với runtime đọc thẳng `.skel`, mọi animation, từng khung, có physics:
+  - trước: 18 file bị từ chối vì tính năng chưa hỗ trợ, vài file đọc được nhưng lệch tới 1000 px;
+  - sau: 43/44 đạt, lệch tối đa 0,01; file còn lại (diamond) là trường hợp suy biến của runtime JS, đã ghi lý do trong script.
+- Lỗi cũ tìm ra nhờ bộ ví dụ:
+  - **số float32 làm tròn còn 7 chữ số**: không khôi phục đúng giá trị, key ở đúng khung bị lùi 1 ulp sang khung trước (powerup, spineboy lệch tới 87). Giờ ghi số ngắn nhất mà vẫn khôi phục đúng float32 (tới 9 chữ số);
+  - **`mixY` của transform** mặc định theo `mixX` của pose, kể cả khi không dùng x; giờ luôn ghi khi cần.
+- Fixture mới `test/fixtures/features` do chính Spine 4.3.26 tạo (`acceptance/skel-fixture.ts`): test so từng bit các frame của timeline, so tư thế với bản nhị phân và với JSON của Spine. JSON chuyển từ `.skel` của 7 ví dụ lớn đều được Spine import lại.
+- `constraint_add` thêm **path** và **slider**:
+  - path: đưa các điểm world-space, rydspine tạo slot `<tên>-path` với đường cong mượt (Catmull-Rom) đi qua các điểm, rồi constraint; `closed` cho bánh xích, `pathBone` để path đi theo một xương;
+  - slider: phát một animation theo `time` hoặc theo thuộc tính của một xương điều khiển; `anim_remove` từ chối xoá animation mà slider đang dùng.
+- **Lỗi của Spine Editor 4.3.26**: khi import, Spine sắp xếp animation theo tên (tự nhiên, không phân biệt hoa thường, thư mục sau cùng) nhưng giữ animation của slider theo vị trí trong file, nên slider trỏ nhầm. rydspine giờ luôn lưu animation theo đúng thứ tự đó; dự án path + slider qua Spine khớp hoàn toàn.
+- `acceptance/compare.ts`: tách phần so tư thế dùng chung cho `spine:check`, test `.skel` và `skel:examples`; so thêm khung của chuỗi ảnh; có thể lấy mẫu giữa hai khung. `spine:check` thử lại một lần khi xuất ảnh lỗi thoáng qua, và báo phần cuối log.
+- Skill `.claude/skills/spine-rigging/SKILL.md`: quy trình dùng tool, công thức từng loại constraint với số liệu từ 30 dự án ví dụ (physics dùng nhiều nhất: inertia ≈ 0,37, strength ≈ 135, damping ≈ 0,82; transform `mixX: -1` để giữ cố định; path `percent` + `chainScale` cho tay chân cao su, `length` + `chain` cho xích), và các quy tắc Spine Editor khắt khe.
+- Test: 35 test đạt; `spine:check` 6/6 (car lỗi xuất ảnh một lần, chạy lại được).
+
 ## Việc tiếp theo
 
 1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
-2. Hỗ trợ thêm khi đọc `.skel`: transform/path/slider constraint, chuỗi ảnh. Giờ có Spine thật để tạo file mẫu.
+2. Tool tạo key cho timeline của constraint và chuỗi ảnh (path position/spacing/mix, mix của transform, time của slider, key chuỗi ảnh) và cho tạo attachment chuỗi ảnh; path có trọng số theo vài xương điều khiển như trong ví dụ.
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

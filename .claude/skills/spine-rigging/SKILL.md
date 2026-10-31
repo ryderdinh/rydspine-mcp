@@ -1,0 +1,85 @@
+---
+name: spine-rigging
+description: Rig and animate 2D art for Spine 4.3 with the rydspine MCP tools — choosing bones, meshes and constraints (IK, transform, path, physics, slider) the way Esoteric's own example projects do, with their typical settings, and checking the result. Use when building or fixing a Spine skeleton or animation through rydspine.
+---
+
+# Rigging for Spine 4.3 with rydspine
+
+The patterns and numbers below come from the official Spine 4.3 example projects
+(github.com/EsotericSoftware/spine-runtimes, `examples/*/export`: spineboy, raptor, mix-and-match,
+stretchyman, tank, vine, sack, celestial-circus, diamond, …). Read the art first, then build in this order.
+
+## Workflow
+
+1. `project_create` or `project_import` (JSON or `.skel`), then `image_import` / `psd_import`. Look at the
+   parts with `image_view`; read joint positions off the art in world pixels.
+2. Bones: prefer `rig_template` (chain, hinge, wheel, limb, biped, quadruped) over `bone_add` one by one.
+   Give world points (`{x, y}`) read from the art.
+3. Bind slots (`slot_update`, `keepWorld` keeps the art in place); fix draw order (0 = back).
+4. Parts that bend get meshes: `mesh_generate` with `bones` for automatic weights. Rigid parts stay regions.
+5. Constraints (`constraint_add`), see the recipes below.
+6. Animate: `anim_create` (say `loop`), then `anim_gait`, `anim_oscillate`, `anim_tween`, `anim_bounce`,
+   `anim_set_keys`, `anim_slot_keys`.
+7. Check after every step that matters: `validate`, `motion_check`, `preview` (look at the frames).
+   `project_status` shows the rig as text. Lock approved parts with `lock_set`; undo with `history_revert`.
+8. `export` when done. With Spine available, `npm run spine:check` round-trips through the real editor.
+
+## Constraint recipes
+
+How often the examples use each kind: physics 134, transform 53, IK 29, path 11, slider 1, image sequences 13.
+
+**IK** — 2 bones for limbs (thigh + shin, upper arm + forearm), target bone outside the chain, usually a
+child of root or of the hip. 1-bone IK for aiming (`aim-ik`, `look-constraint`, cannons, guns).
+`bendPositive` picks the knee/elbow side. The examples rarely use stretch, compress or softness.
+
+**Transform** — the second most used constraint, in four patterns:
+- *Holder that stays put*: x+y with `mixX: -1` cancels the source's motion (`face-holder`,
+  `corners-bottom`, `pan-front`), e.g. to keep a face still while the body bounces.
+- *Parallax and follow*: x+y with a partial mix makes parts trail a control bone: eyes 0.2, hair 0.05–0.15,
+  hat 0.6, pupils 0.4, `tail` 0.45. One control bone moving many face parts at different mixes gives a
+  cheap 3D turn.
+- *Copy everything*: rotate, x, y, scaleX, scaleY and shearY from a parent, with some mixes at 0
+  (alien `eye`, `eye-root`) to choose which channels follow.
+- *Local*: `localSource` + `localTarget` copies local values, e.g. a squash control driving left/right bones.
+Write it as `{type: "transform", name, bones, source, properties: {x: {to: {x: {}}}, y: {to: {y: {}}}}, mixX, mixY}`;
+`mixY` defaults to `mixX`. Mixes may be negative.
+
+**Path** — bones follow a curve. Give `points` read off the art and rydspine creates the path slot.
+- Rubber limbs (stretchyman, mix-and-match): `spacingMode: "percent"`, `rotateMode: "chainScale"`, 4–8 bones.
+  In the examples the path is weighted to a few control bones so moving them bends the whole limb; rydspine
+  paths follow one bone (`pathBone`), so put the path on the limb's root and animate `position`/the root.
+- Chains, ropes, vines: `spacingMode: "length"`, `rotateMode: "chain"` (morningstar 8 bones, vine 13).
+- Tank treads: `closed: true`, `length` + `chain`, one bone per tread (36), animate `position` to roll.
+- Use `pathBone` so the curve moves with the body.
+
+**Physics** — the most used, on almost every pro example.
+- `rotate: 1` for hair strands, feathers, capes, ears, antennae (most cases). `x`/`y` for soft masses that
+  bounce (belly, chest, cheeks, face-control). `rotate` + `scaleX` for ruffles.
+- Typical settings: inertia ≈ 0.37 (0.12–1), strength ≈ 135 (up to 173), damping ≈ 0.82 (0.15–1),
+  mass ≈ 2.8 (1.4–4), limit 500, fps 20 when set; gravity 70 only where hanging things should droop.
+- `rig_template` chain with `physics: true` adds drag/settle physics along a chain.
+
+**Slider** — plays an animation by a value instead of time. Create the animation first.
+- Bone-driven (diamond): `{type: "slider", animation, bone, property: "rotate", scale: 1/360, loop: true}`
+  turns a control bone's rotation into animation time (one turn = one second here).
+- Time-driven: `time` sets a fixed pose of the animation (expression presets, turn-around sheets).
+
+**Image sequences** — frame-by-frame effects on one attachment (diamond shines: 7 frames). Paths are
+`<path><number>` with `start` and `digits`; animate with sequence keys (`mode`: hold, once, loop, pingpong,
+and reverse variants; `delay` per frame).
+
+## Things the Spine Editor is strict about
+
+rydspine already handles these; keep them in mind when editing JSON by hand:
+- Each mesh vertex lists its bones in skeleton order, or import fails ("Index -2 out of bounds").
+- Meshes need `edges`, or Spine warns that the file lacks nonessential data.
+- Key times within ~0.06 frame of a 30 fps frame are snapped by Spine; put keys on frames.
+- Spine sorts animations by name on import (natural, case-insensitive, folders last) but keeps slider
+  animation references by file index; rydspine saves animations in that order so sliders stay correct.
+- Spine writes floats with 7–8 digits; the JS runtime reads JSON as doubles and `.skel` as float32, so a key
+  exactly on a frame can land on either side of it. Compare poses between frames.
+
+## Not yet in the tools
+
+Keys for constraint timelines (path position/spacing/mix, transform mixes, slider time, sequence keys)
+have no dedicated tool yet; they round-trip through import/export and `.skel` conversion.

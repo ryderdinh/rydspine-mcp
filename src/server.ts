@@ -6,7 +6,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { bounce, EASES, gait, oscillate, PROPERTIES, SLOT_PROPERTIES, tween, writeKeys, writeSlotKeys } from "./motion.js";
-import { importProject } from "./importer.js";
+import { diffVersions } from "./diff.js";
+import { importProject, syncProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
 import { importPsd } from "./psd.js";
 import {
@@ -740,6 +741,50 @@ export function createServer(): McpServer {
 						.join("\n"),
 				),
 			),
+	);
+
+	server.registerTool(
+		"history_diff",
+		{
+			description: "Show what changed between two versions: bones, slots, constraints, attachments, animation timelines, loops and locks.",
+			inputSchema: {
+				project,
+				from: z.number().int().describe("Older version"),
+				to: z.number().int().optional().describe("Newer version (default: current)"),
+			},
+		},
+		({ project, from, to }) =>
+			run(() => {
+				const ws = Workspace.open(project);
+				const target = to ?? ws.meta.version;
+				const lines = diffVersions(ws.snapshot(from), ws.snapshot(target));
+				return text([`v${from} -> v${target}: ${lines.length ? `${lines.length} changes` : "no changes"}`, ...lines].join("\n"));
+			}),
+	);
+
+	server.registerTool(
+		"project_sync",
+		{
+			description:
+				"Bring back a project after it was edited in Spine Editor and exported as JSON again. The edit becomes a " +
+				"new version (diffed against the previous one, revertible); images are added from the folder or atlas.",
+			inputSchema: {
+				project,
+				skeleton: z.string().describe("Path to the re-exported skeleton .json"),
+				images: z.string().optional(),
+				atlas: z.string().optional(),
+			},
+		},
+		({ project, ...spec }) =>
+			run(() => {
+				const ws = Workspace.open(project);
+				const before = ws.snapshot(ws.meta.version);
+				const notes = syncProject(ws, spec);
+				load(ws);
+				const version = ws.commit(`sync from Spine: ${spec.skeleton}`);
+				const changes = diffVersions(before, ws.snapshot(version));
+				return text([...notes, `saved as version ${version}; ${changes.length} changes:`, ...changes].join("\n"));
+			}),
 	);
 
 	server.registerTool(

@@ -18,14 +18,14 @@ export interface ImportSpec {
 	loops?: string[];
 }
 
-export function importProject(spec: ImportSpec): { ws: Workspace; notes: string[] } {
-	const notes: string[] = [];
-	if (!existsSync(spec.skeleton)) throw new UserError(`skeleton file not found: ${spec.skeleton}`);
-	if (!spec.skeleton.toLowerCase().endsWith(".json"))
+/** Reads and normalizes an exported Spine 4.3 skeleton JSON. */
+function readSkeleton(path: string, notes: string[]): SkeletonDoc {
+	if (!existsSync(path)) throw new UserError(`skeleton file not found: ${path}`);
+	if (!path.toLowerCase().endsWith(".json"))
 		throw new UserError("only skeleton JSON is supported; export JSON (not binary .skel) from Spine");
 	let doc: SkeletonDoc;
 	try {
-		doc = JSON.parse(readFileSync(spec.skeleton, "utf8"));
+		doc = JSON.parse(readFileSync(path, "utf8"));
 	} catch (e) {
 		throw new UserError(`not valid JSON: ${(e as Error).message}`);
 	}
@@ -36,6 +36,7 @@ export function importProject(spec: ImportSpec): { ws: Workspace; notes: string[
 		);
 	const version = String(doc.skeleton?.spine ?? "unknown");
 	if (!version.startsWith("4.3")) notes.push(`exported by Spine ${version}; rydspine targets 4.3 (${SPINE_VERSION})`);
+	doc.skeleton ??= { spine: version };
 	doc.bones ??= [{ name: "root" }];
 	doc.slots ??= [];
 	doc.constraints ??= [];
@@ -43,18 +44,20 @@ export function importProject(spec: ImportSpec): { ws: Workspace; notes: string[
 	if (!doc.skins.some((s) => s.name === "default")) doc.skins.unshift({ name: "default", attachments: {} });
 	doc.animations ??= {};
 	doc.skeleton.images = "./images/";
+	return doc;
+}
 
+function addImages(ws: Workspace, spec: { images?: string; atlas?: string }, notes: string[], required: boolean): void {
+	if (spec.images) notes.push(`copied ${ws.addImageDir(spec.images).length} images`);
+	else if (spec.atlas) notes.push(`unpacked ${unpackAtlas(spec.atlas, ws.imagesDir).length} images from the atlas`);
+	else if (required) throw new UserError("give `images` (folder of PNGs) or `atlas` (.atlas next to its .png pages)");
+}
+
+export function importProject(spec: ImportSpec): { ws: Workspace; notes: string[] } {
+	const notes: string[] = [];
+	const doc = readSkeleton(spec.skeleton, notes);
 	const ws = Workspace.create(spec.name, doc);
-	if (spec.images) {
-		const added = ws.addImageDir(spec.images);
-		notes.push(`copied ${added.length} images`);
-	} else if (spec.atlas) {
-		const added = unpackAtlas(spec.atlas, ws.imagesDir);
-		notes.push(`unpacked ${added.length} images from the atlas`);
-	} else {
-		throw new UserError("give `images` (folder of PNGs) or `atlas` (.atlas next to its .png pages)");
-	}
-
+	addImages(ws, spec, notes, true);
 	for (const name of spec.loops ?? []) {
 		if (!doc.animations[name]) throw new UserError(`animation "${name}" not found in the skeleton`);
 		ws.meta.loops[name] = true;
@@ -62,6 +65,38 @@ export function importProject(spec: ImportSpec): { ws: Workspace; notes: string[
 	load(ws);
 	ws.commit(`import ${spec.skeleton}`);
 	return { ws, notes };
+}
+
+export interface SyncSpec {
+	skeleton: string;
+	images?: string;
+	atlas?: string;
+}
+
+/**
+ * Brings back a skeleton that was edited in Spine Editor and exported again: it replaces the project's
+ * skeleton as a new version (so it can be diffed and reverted), adds changed images, keeps loop flags
+ * for animations that still exist, and reports locked items the edit touched.
+ */
+export function syncProject(ws: Workspace, spec: SyncSpec): string[] {
+	const notes: string[] = [];
+	const before = ws.doc;
+	const doc = readSkeleton(spec.skeleton, notes);
+	addImages(ws, spec, notes, false);
+	ws.doc = doc;
+	for (const name of Object.keys(ws.meta.loops)) if (!doc.animations[name]) delete ws.meta.loops[name];
+	const touched = lockedChanges(before, doc, ws.meta.locks);
+	if (touched.length) notes.push(`note: the Spine edit changed locked items: ${touched.join(", ")}`);
+	return notes;
+}
+
+function lockedChanges(a: SkeletonDoc, b: SkeletonDoc, locks: { bones: string[]; slots: string[]; animations: string[] }): string[] {
+	const same = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y);
+	const out: string[] = [];
+	for (const n of locks.bones) if (!same(a.bones.find((x) => x.name === n), b.bones.find((x) => x.name === n))) out.push(`bone ${n}`);
+	for (const n of locks.slots) if (!same(a.slots.find((x) => x.name === n), b.slots.find((x) => x.name === n))) out.push(`slot ${n}`);
+	for (const n of locks.animations) if (!same(a.animations[n], b.animations[n])) out.push(`animation ${n}`);
+	return out;
 }
 
 /** Writes every atlas region back out as a PNG at its original (untrimmed, unrotated) size. */

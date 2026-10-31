@@ -6,7 +6,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { bounce, EASES, gait, oscillate, PROPERTIES, SLOT_PROPERTIES, tween, writeKeys, writeSlotKeys } from "./motion.js";
-import { importProject } from "./importer.js";
+import { diffVersions } from "./diff.js";
+import { importProject, syncProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
 import { importPsd } from "./psd.js";
 import {
@@ -219,6 +220,7 @@ export function createServer(): McpServer {
 	);
 
 	const point = z.object({ x: z.number(), y: z.number() });
+	const leg = z.object({ start: point.describe("Shoulder / hip"), joint: point.describe("Elbow / knee, as drawn"), foot: point });
 	const template = z.discriminatedUnion("kind", [
 		z
 			.object({
@@ -287,14 +289,35 @@ export function createServer(): McpServer {
 				parts: z.record(z.string(), z.string()).optional().describe("slot -> bone"),
 			})
 			.describe("Two-legged character: hips, torso, neck, head, IK arms (left-arm-*) and legs (left-leg-*)"),
+		z
+			.object({
+				kind: z.literal("quadruped"),
+				hips: point.describe("Where the back legs attach"),
+				chest: point.describe("Where the front legs attach"),
+				neck: point,
+				head: point,
+				frontLeft: leg,
+				frontRight: leg,
+				backLeft: leg,
+				backRight: leg,
+				tail: z.array(point).min(2).optional().describe("Base to tip"),
+				tailSegments: z.number().int().min(1).max(12).optional(),
+				tailSlots: z.array(z.string()).optional(),
+				parts: z.record(z.string(), z.string()).optional().describe("slot -> bone"),
+			})
+			.describe(
+				"Four-legged animal: body, neck, head, IK legs (front-left-leg-*, back-right-leg-* ...), optional tail. " +
+					"Walk with anim_gait: back-left 0, front-left 0.25, back-right 0.5, front-right 0.75",
+			),
 	]);
 
 	server.registerTool(
 		"rig_template",
 		{
 			description:
-				"Build a common structure from a few world-space points (joints read off the art): chain, hinge, wheel, " +
-				"limb (2 bones + IK) or biped. Faster and more consistent than adding bones one by one.",
+				"Build a common structure from a few world-space points (joints read off the art): chain (also tails, " +
+				"necks and wings: bind the wing art and flap with anim_oscillate + delayPerBone), hinge, wheel, limb " +
+				"(2 bones + IK), biped or quadruped. Faster and more consistent than adding bones one by one.",
 			inputSchema: { project, template },
 		},
 		({ project, template }) =>
@@ -308,7 +331,9 @@ export function createServer(): McpServer {
 								? templates.wheel(ws, template)
 								: template.kind === "limb"
 									? templates.limb(ws, template)
-									: templates.biped(ws, template);
+									: template.kind === "biped"
+										? templates.biped(ws, template)
+										: templates.quadruped(ws, template);
 				return `bones: ${bones.join(", ")}`;
 			}),
 	);
@@ -740,6 +765,50 @@ export function createServer(): McpServer {
 						.join("\n"),
 				),
 			),
+	);
+
+	server.registerTool(
+		"history_diff",
+		{
+			description: "Show what changed between two versions: bones, slots, constraints, attachments, animation timelines, loops and locks.",
+			inputSchema: {
+				project,
+				from: z.number().int().describe("Older version"),
+				to: z.number().int().optional().describe("Newer version (default: current)"),
+			},
+		},
+		({ project, from, to }) =>
+			run(() => {
+				const ws = Workspace.open(project);
+				const target = to ?? ws.meta.version;
+				const lines = diffVersions(ws.snapshot(from), ws.snapshot(target));
+				return text([`v${from} -> v${target}: ${lines.length ? `${lines.length} changes` : "no changes"}`, ...lines].join("\n"));
+			}),
+	);
+
+	server.registerTool(
+		"project_sync",
+		{
+			description:
+				"Bring back a project after it was edited in Spine Editor and exported as JSON again. The edit becomes a " +
+				"new version (diffed against the previous one, revertible); images are added from the folder or atlas.",
+			inputSchema: {
+				project,
+				skeleton: z.string().describe("Path to the re-exported skeleton .json"),
+				images: z.string().optional(),
+				atlas: z.string().optional(),
+			},
+		},
+		({ project, ...spec }) =>
+			run(() => {
+				const ws = Workspace.open(project);
+				const before = ws.snapshot(ws.meta.version);
+				const notes = syncProject(ws, spec);
+				load(ws);
+				const version = ws.commit(`sync from Spine: ${spec.skeleton}`);
+				const changes = diffVersions(before, ws.snapshot(version));
+				return text([...notes, `saved as version ${version}; ${changes.length} changes:`, ...changes].join("\n"));
+			}),
 	);
 
 	server.registerTool(

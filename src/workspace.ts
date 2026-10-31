@@ -126,6 +126,13 @@ export class Workspace {
 			});
 	}
 
+	snapshot(version: number): { doc: SkeletonDoc; meta: ProjectMeta } {
+		const path = this.snapshotPath(version);
+		if (!existsSync(path)) throw new UserError(`version ${version} not found`);
+		const snap = JSON.parse(readFileSync(path, "utf8")) as Snapshot;
+		return { doc: snap.doc, meta: snap.meta };
+	}
+
 	/** Restores an earlier version as a new version, so the revert itself can be undone. */
 	revert(version: number): number {
 		const path = this.snapshotPath(version);

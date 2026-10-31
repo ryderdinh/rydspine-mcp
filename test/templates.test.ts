@@ -202,4 +202,97 @@ describe("rig_template", () => {
 		poseAt(loaded, "appear", 0.7);
 		expect(loaded.skeleton.findSlot("wheel")!.appliedPose.getAttachment()).toBeNull();
 	});
+
+	it("flags a mesh that folds over itself, but not uniform scaling", async () => {
+		const p = "banner";
+		await h.ok("project_create", { name: p });
+		await h.ok("image_import", { project: p, images: [{ path: shape(art, "banner", 160, 30, [200, 80, 80]), x: 80, y: 50 }] });
+		await h.ok("rig_template", {
+			project: p,
+			template: { kind: "chain", name: "cloth", points: [{ x: 0, y: 50 }, { x: 160, y: 50 }], segments: 4, slots: ["banner"] },
+		});
+		await h.ok("anim_create", { project: p, name: "fold", loop: false });
+		await h.ok("anim_tween", { project: p, animation: "fold", bones: ["cloth3"], property: "rotate", from: 0, to: 175, duration: 0.5 });
+		const v = await h.call("validate", { project: p });
+		expect(v.isError).toBe(true);
+		expect(v.text).toMatch(/fold: mesh banner in slot banner folds over itself/);
+		await h.ok("anim_remove", { project: p, name: "fold" });
+
+		// Popping in from nearly zero scale is uniform, so it is not deformation.
+		await h.ok("anim_create", { project: p, name: "grow", loop: false });
+		for (const property of ["scalex", "scaley"])
+			await h.ok("anim_tween", { project: p, animation: "grow", bones: ["root"], property, from: 0.01, to: 1, duration: 0.5 });
+		expect((await h.ok("validate", { project: p })).text).not.toMatch(/grow: mesh/);
+	});
+
+	it("builds a quadruped that walks on four planted feet", async () => {
+		const p = "dog";
+		await h.ok("project_create", { name: p });
+		const leg = (name: string, x: number, y: number, c: [number, number, number]) => ({ path: shape(art, name, 12, 40, c), name, x, y });
+		const far: [number, number, number] = [150, 110, 70];
+		const near: [number, number, number] = [190, 140, 90];
+		await h.ok("image_import", {
+			project: p,
+			images: [
+				leg("bl-upper", -46, 58, far), leg("bl-lower", -47, 22, far), leg("fl-upper", 47, 58, far), leg("fl-lower", 47, 22, far),
+				{ path: shape(art, "tail-art", 50, 10, [170, 125, 80], true), name: "tail", x: -72, y: 97 },
+				{ path: shape(art, "dog-body", 112, 40, [190, 140, 90], true), name: "body", x: 0, y: 82 },
+				{ path: shape(art, "dog-head", 40, 30, [200, 150, 100], true), name: "head", x: 92, y: 118 },
+				leg("br-upper", -40, 58, near), leg("br-lower", -41, 22, near), leg("fr-upper", 53, 58, near), leg("fr-lower", 53, 22, near),
+			],
+		});
+		const L = (sx: number, jx: number, fx: number) => ({ start: { x: sx, y: 76 }, joint: { x: jx, y: 40 }, foot: { x: fx, y: 4 } });
+		const legs = { backLeft: L(-46, -50, -46), backRight: L(-40, -44, -40), frontLeft: L(47, 50, 47), frontRight: L(53, 56, 53) };
+		const parts: Record<string, string> = { body: "body", head: "head" };
+		for (const [img, bone] of [["bl", "back-left"], ["br", "back-right"], ["fl", "front-left"], ["fr", "front-right"]]) {
+			parts[`${img}-upper`] = `${bone}-leg-upper`;
+			parts[`${img}-lower`] = `${bone}-leg-lower`;
+		}
+		const r = await h.ok("rig_template", {
+			project: p,
+			template: {
+				kind: "quadruped",
+				hips: { x: -48, y: 82 },
+				chest: { x: 50, y: 84 },
+				neck: { x: 72, y: 104 },
+				head: { x: 108, y: 120 },
+				...legs,
+				tail: [{ x: -50, y: 88 }, { x: -96, y: 106 }],
+				tailSegments: 2,
+				tailSlots: ["tail"],
+				parts,
+			},
+		});
+		expect(r.text).toContain("front-right-leg-target");
+		for (const [bone, l] of [["back-left-leg-lower", legs.backLeft], ["front-right-leg-lower", legs.frontRight]] as const) {
+			const at = world(p, bone);
+			expect(Math.hypot(at.x - l.joint.x, at.y - l.joint.y)).toBeLessThan(0.5);
+		}
+		await h.ok("anim_create", { project: p, name: "walk", loop: true });
+		await h.ok("anim_gait", {
+			project: p,
+			animation: "walk",
+			feet: [
+				{ bone: "back-left-leg-target", phase: 0 },
+				{ bone: "front-left-leg-target", phase: 0.25 },
+				{ bone: "back-right-leg-target", phase: 0.5 },
+				{ bone: "front-right-leg-target", phase: 0.75 },
+			],
+			body: "body",
+			period: 1,
+			stride: 30,
+			lift: 10,
+			contact: 0.7,
+			bob: 2,
+		});
+		await h.ok("anim_oscillate", { project: p, animation: "walk", bones: ["tail1", "tail2"], property: "rotate", amplitude: 12, period: 0.5, end: 1, delayPerBone: 0.06 });
+		expect((await h.ok("validate", { project: p })).text).toMatch(/^OK/);
+		const m = await h.ok("motion_check", {
+			project: p,
+			animation: "walk",
+			feet: ["back-left-leg-target", "front-left-leg-target", "back-right-leg-target", "front-right-leg-target"],
+		});
+		expect(m.text).toMatch(/^OK/);
+		await h.ok("preview", { project: p, animation: "walk", frames: 6 });
+	});
 });

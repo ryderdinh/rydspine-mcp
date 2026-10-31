@@ -9,10 +9,10 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 | 0. Spike & chốt | ✅ Xong (trừ Spine CLI) | Runtime 4.3 chạy headless. Bỏ Spine CLI khỏi v1 vì máy người dùng không được cài Spine |
 | 1. Lõi | ✅ Xong bản đầu | MCP server, workspace, lịch sử phiên bản, validate, export |
 | 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận) và project Spine 4.3 có sẵn. Chưa đọc file binary `.skel`; ảnh phẳng chưa tách bộ phận để sau v1 |
-| 3. Rig | 🟡 Gần xong | Có bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi, bản lề, bánh xe, chi IK, 2 chân). Chưa có pose_test, mẫu 4 chân, mẫu cánh |
+| 3. Rig | ✅ Xong bản đầu | Bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân) |
 | 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
-| 5. Kiểm tra & preview | ✅ Xong bản đầu | validate, kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio**. Chưa đo biến dạng mesh bất thường |
-| 6. Chỉnh sửa | 🟡 Một phần | Có khóa, revert, sửa theo khoảng thời gian. Chưa có diff giữa các phiên bản, chưa nhập lại JSON sửa trong Spine |
+| 5. Kiểm tra & preview | ✅ Xong bản đầu | validate (kể cả mesh bị gập, ép dẹt, kéo giãn), kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio** |
+| 6. Chỉnh sửa | ✅ Xong bản đầu | Khóa, revert, sửa theo khoảng thời gian, so sánh phiên bản (`history_diff`), nhập lại JSON đã sửa trong Spine (`project_sync`) |
 | 7. Đầu ra & nghiệm thu | 🟡 Một phần | Bộ 6 asset nghiệm thu chạy tự động và đạt hết kiểm tra, nhưng dùng art tự vẽ. Chưa nghiệm thu trên art thật; chưa xác nhận Spine Editor mở được file xuất ra |
 
 ## Quyết định đã chốt
@@ -93,10 +93,21 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
   - Bản studio của 6 asset đã đăng làm trang web riêng tư.
 - Test: 23 test đạt.
 
+### 2026-10-31
+- Đã merge đợt trước vào `main` ([ryderdinh/rydspine-mcp#1](https://github.com/ryderdinh/rydspine-mcp/pull/1)); làm tiếp trên nhánh mới tách từ `main`.
+- Đã kiểm tra vùng sáng của rương trong player: không phải lỗi. Màu đạt vàng sáng ở đỉnh; ảnh chụp trước chỉ rơi vào lúc đang mờ dần.
+- `validate` phát hiện mesh biến dạng khi chạy animation:
+  - tam giác bị lật là lỗi; bị ép dưới 15% hoặc giãn quá 6 lần là cảnh báo;
+  - so với mức thay đổi trung vị của cả mesh, nên lật gương, phóng to đều hay bật ra từ 0 không bị báo nhầm;
+  - phát hiện thêm: physics có thể quất đuôi đến mức gập mesh khi cả nhân vật phóng to quá nhanh.
+- `history_diff`: liệt kê khác biệt giữa hai phiên bản (xương, slot, constraint, attachment, từng timeline, vòng lặp, khóa).
+- `project_sync`: nhập lại JSON đã sửa trong Spine Editor thành phiên bản mới, có báo khác biệt, giữ cờ lặp, báo nếu bản sửa đụng vào phần đã khóa; quay lại được.
+- Mẫu rig 4 chân (`rig_template` kind `quadruped`): thân, cổ, đầu, 4 chân IK, đuôi tùy chọn. Đi 4 nhịp bằng `anim_gait`, không trượt chân. Cánh dùng mẫu chuỗi đốt.
+- Test: 27 test đạt.
+
 ## Việc tiếp theo
 
 1. Nghiệm thu trên art thật khi có asset, và xác nhận Spine Editor nhập được JSON xuất ra.
-2. Mẫu rig 4 chân và cánh nhiều đốt.
-3. Đo biến dạng mesh bất thường (tam giác bị lật hoặc co quá mức).
-4. `history_diff` và nhập lại JSON đã sửa trong Spine.
-5. Đọc file binary `.skel`.
+2. Đọc file binary `.skel` (cần chuyển dữ liệu runtime ngược lại thành JSON).
+3. Skin: tạo và đổi bộ trang phục / biến thể.
+4. Tách ảnh phẳng thành bộ phận (để sau v1).

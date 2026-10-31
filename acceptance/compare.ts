@@ -4,14 +4,16 @@ import {
 	type Attachment,
 	AtlasAttachmentLoader,
 	type Event,
-	MeshAttachment,
 	MixFrom,
 	Physics,
+	PointAttachment,
 	RegionAttachment,
 	Skeleton,
 	type SkeletonData,
 	TextureAtlas,
 	type TextureAtlasRegion,
+	Vector2,
+	VertexAttachment,
 } from "@esotericsoftware/spine-core";
 
 export const FPS = 30;
@@ -39,10 +41,15 @@ function worldVertices(skeleton: Skeleton, slotIndex: number, att: Attachment | 
 		att.computeWorldVertices(slot, att.getOffsets(slot.appliedPose), v, 0, 2);
 		return v;
 	}
-	if (att instanceof MeshAttachment) {
+	// Meshes, bounding boxes, clippings and paths (weighted or not).
+	if (att instanceof VertexAttachment) {
 		const v = new Array<number>(att.worldVerticesLength);
 		att.computeWorldVertices(skeleton, slot, 0, att.worldVerticesLength, v, 0, 2);
 		return v;
+	}
+	if (att instanceof PointAttachment) {
+		const p = att.computeWorldPosition(slot.bone.appliedPose, new Vector2());
+		return [p.x, p.y, att.computeWorldRotation(slot.bone.appliedPose), 0];
 	}
 	return [];
 }

@@ -1,10 +1,10 @@
 // Rig editing: bones, slots, attachments, meshes and constraints.
 import { basename, join } from "node:path";
-import { type BonePose, Vector2 } from "@esotericsoftware/spine-core";
+import { type BonePose, MeshAttachment, RegionAttachment, Vector2 } from "@esotericsoftware/spine-core";
 import { imageSize, readPng } from "./atlas.js";
 import { type ContourOptions, contourMesh } from "./contour.js";
 import { remapDrawOrders } from "./draworder.js";
-import { boneByName, load } from "./runtime.js";
+import { boneByName, load, shownPath } from "./runtime.js";
 import type { AttachmentJson, BoneJson, ConstraintJson, MeshJson, RegionJson, SlotJson } from "./types.js";
 import { checkName, UserError, type Workspace } from "./workspace.js";
 
@@ -293,6 +293,124 @@ export function importSequence(ws: Workspace, spec: SequenceSpec): { slot: strin
 	return { slot: slotName, frames: count, width, height, warnings };
 }
 
+export interface ShapeSpec {
+	type: "point" | "boundingbox" | "clipping";
+	/** Attachment name; also the new slot's name. */
+	name: string;
+	/** Bone the new slot follows (default: the bone of `around`, else root). */
+	bone?: string;
+	/** point: world position and rotation. */
+	x?: number;
+	y?: number;
+	rotation?: number;
+	/** boundingbox / clipping: world polygon, at least 3 points. */
+	points?: { x: number; y: number }[];
+	/** boundingbox / clipping: trace this slot's attachment (image outline or mesh hull) instead of points. */
+	around?: string;
+	/** Grow a traced outline by px (default 2). */
+	padding?: number;
+	/** clipping: first slot clipped (default: end); the clipping slot goes right below it. */
+	from?: string;
+	/** clipping: last slot clipped, in draw order. */
+	end?: string;
+}
+
+/** World outline of a slot's current attachment: the image's opaque outline for a region, the hull for a mesh. */
+function outlineOf(ws: Workspace, slotName: string, padding: number): { points: { x: number; y: number }[]; warnings: string[] } {
+	const slotJson = findSlot(ws, slotName);
+	const skeleton = load(ws).skeleton;
+	const slot = skeleton.findSlot(slotName)!;
+	const att = slot.appliedPose.getAttachment();
+	if (att instanceof RegionAttachment) {
+		const png = readPng(ws.imagePath(shownPath(att, slot.appliedPose)));
+		const m = contourMesh(png, { padding, detail: Math.max(1, Math.max(png.width, png.height) / 25) });
+		const v = new Array<number>(8);
+		att.computeWorldVertices(slot, att.getOffsets(slot.appliedPose), v, 0, 2);
+		const [blx, bly, ulx, uly, urx, ury] = v;
+		const points = m.points.slice(0, m.hull).map(([px, py]) => {
+			const u = px / png.width;
+			const w = py / png.height;
+			return { x: ulx + u * (urx - ulx) + w * (blx - ulx), y: uly + u * (ury - uly) + w * (bly - uly) };
+		});
+		return { points, warnings: m.warnings };
+	}
+	if (att instanceof MeshAttachment) {
+		const n = att.worldVerticesLength;
+		const v = new Array<number>(n);
+		att.computeWorldVertices(skeleton, slot, 0, n, v, 0, 2);
+		const hull = att.hullLength / 2;
+		const points = Array.from({ length: hull }, (_, i) => ({ x: v[i * 2], y: v[i * 2 + 1] }));
+		const warnings = att.bones ? [`"${slotName}" is a weighted mesh; the shape is traced in the setup pose and follows only its own bone`] : [];
+		if (padding) {
+			const cx = points.reduce((s, p) => s + p.x, 0) / hull;
+			const cy = points.reduce((s, p) => s + p.y, 0) / hull;
+			for (const p of points) {
+				const d = Math.hypot(p.x - cx, p.y - cy) || 1;
+				p.x += ((p.x - cx) / d) * padding;
+				p.y += ((p.y - cy) / d) * padding;
+			}
+		}
+		return { points, warnings };
+	}
+	throw new UserError(`slot "${slotJson.name}" shows ${att ? "an attachment that is not an image or mesh" : "nothing"}; give points instead`);
+}
+
+/**
+ * Adds a point (a marker the game reads: muzzle, hand grip), bounding box (a hit area) or clipping
+ * attachment (a mask) in a new slot. Shapes come from world points or trace another slot's art.
+ */
+export function addShape(ws: Workspace, spec: ShapeSpec): { slot: string; vertices: number; warnings: string[] } {
+	checkName("attachment", spec.name);
+	if (ws.doc.slots.some((s) => s.name === spec.name)) throw new UserError(`slot "${spec.name}" already exists`);
+	const bone = spec.bone ?? (spec.around ? findSlot(ws, spec.around).bone : "root");
+	findBone(ws, bone);
+	const frame = boneByName(load(ws).skeleton, bone).appliedPose;
+	const slot: SlotJson = { name: spec.name, bone, attachment: spec.name };
+	let att: AttachmentJson;
+	let warnings: string[] = [];
+	let count = 0;
+	if (spec.type === "point") {
+		if (spec.points || spec.around || spec.end || spec.from) throw new UserError("a point takes x, y and rotation only");
+		const local = toLocal(frame, spec.x ?? frame.worldX, spec.y ?? frame.worldY, spec.rotation ?? 0);
+		att = { type: "point" };
+		if (local.x) att.x = local.x;
+		if (local.y) att.y = local.y;
+		if (local.rotation) att.rotation = local.rotation;
+		att.color = "ffd800ff";
+		count = 1;
+	} else {
+		if (spec.x !== undefined || spec.y !== undefined || spec.rotation !== undefined) throw new UserError(`a ${spec.type} takes points or around, not x/y/rotation`);
+		if (!!spec.points === !!spec.around) throw new UserError(`give a ${spec.type} either points or around`);
+		let points = spec.points ?? [];
+		if (spec.around) ({ points, warnings } = outlineOf(ws, spec.around, spec.padding ?? 2));
+		else if (spec.padding !== undefined) throw new UserError("padding applies to around only");
+		if (points.length < 3) throw new UserError(`a ${spec.type} needs at least 3 points`);
+		const vertices = points.flatMap((p) => {
+			const q = frame.worldToLocal(new Vector2(p.x, p.y));
+			return [round(q.x), round(q.y)];
+		});
+		count = points.length;
+		att = { type: spec.type, vertexCount: count, vertices, color: spec.type === "clipping" ? "ce3a3aff" : "60f000ff" };
+	}
+	if (spec.type !== "clipping") {
+		if (spec.end || spec.from) throw new UserError("from and end are for clipping");
+		ws.doc.slots.push(slot);
+	} else {
+		if (!spec.end) throw new UserError("a clipping needs end: the last slot it clips");
+		const end = ws.doc.slots.findIndex((s) => s.name === spec.end);
+		if (end < 0) throw new UserError(`slot "${spec.end}" not found`);
+		const from = spec.from ? ws.doc.slots.findIndex((s) => s.name === spec.from) : end;
+		if (from < 0) throw new UserError(`slot "${spec.from}" not found`);
+		if (from > end) throw new UserError(`"${spec.from}" is drawn after "${spec.end}"; from must not be above end`);
+		att.end = spec.end;
+		const before = ws.doc.slots.map((s) => s.name);
+		ws.doc.slots.splice(from, 0, slot);
+		remapDrawOrders(ws.doc.animations, before, ws.doc.slots.map((s) => s.name));
+	}
+	(defaultSkin(ws).attachments[spec.name] ??= {})[spec.name] = att;
+	return { slot: spec.name, vertices: count, warnings };
+}
+
 export interface SlotUpdate {
 	name: string;
 	bone?: string;
@@ -465,43 +583,61 @@ function gridMesh(cols: number, rows: number) {
 	return { uv: order.map(([i, j]) => [i / cols, j / rows] as [number, number]), triangles, hull };
 }
 
-/** Inverse-square distance to each bone segment, keeping the strongest influences. */
-function weigh(ws: Workspace, slotBone: string, local: number[], boneNames: string[], maxInfluences: number): number[] {
+interface Influence {
+	index: number;
+	pose: BonePose;
+	weight: number;
+}
+
+/** Inverse-square distance from a world point to each bone segment, keeping the strongest influences. */
+function influences(ws: Workspace, boneNames: string[], maxInfluences: number): (x: number, y: number) => Influence[] {
 	const skeleton = load(ws).skeleton;
-	const slotPose = boneByName(skeleton, slotBone).appliedPose;
 	const bones = boneNames.map((n) => {
 		const bone = boneByName(skeleton, n);
 		const p = bone.appliedPose;
 		const len = bone.data.length || 1;
 		return { index: bone.data.index, pose: p, ax: p.worldX, ay: p.worldY, bx: p.worldX + p.a * len, by: p.worldY + p.c * len };
 	});
-	const out: number[] = [];
-	for (let i = 0; i < local.length; i += 2) {
-		const w = slotPose.localToWorld(new Vector2(local[i], local[i + 1]));
+	return (x, y) => {
 		const scored = bones
 			.map((b) => {
 				const dx = b.bx - b.ax;
 				const dy = b.by - b.ay;
-				const t = Math.max(0, Math.min(1, ((w.x - b.ax) * dx + (w.y - b.ay) * dy) / (dx * dx + dy * dy || 1)));
-				const d = Math.hypot(w.x - (b.ax + t * dx), w.y - (b.ay + t * dy));
+				const t = Math.max(0, Math.min(1, ((x - b.ax) * dx + (y - b.ay) * dy) / (dx * dx + dy * dy || 1)));
+				const d = Math.hypot(x - (b.ax + t * dx), y - (b.ay + t * dy));
 				return { b, score: 1 / (d * d + 1) };
 			})
 			.sort((p, q) => q.score - p.score)
 			.slice(0, maxInfluences);
-		const total = scored.reduce((s, x) => s + x.score, 0);
-		const weights = scored.map((x) => Math.round((x.score / total) * 1000) / 1000);
-		weights[0] = Math.round((1 - weights.slice(1).reduce((s, x) => s + x, 0)) * 1000) / 1000;
+		const total = scored.reduce((s, e) => s + e.score, 0);
+		const weights = scored.map((e) => Math.round((e.score / total) * 1000) / 1000);
+		weights[0] = Math.round((1 - weights.slice(1).reduce((s, e) => s + e, 0)) * 1000) / 1000;
 		// Spine Editor fails to import some weighted meshes ("Index -2 out of bounds") unless each vertex
 		// lists its bones in skeleton order; the runtime accepts any order.
-		const kept = scored
-			.map((x, k) => ({ ...x, weight: weights[k] }))
-			.filter((x) => x.weight > 0)
-			.sort((p, q) => p.b.index - q.b.index);
-		out.push(kept.length);
-		for (const { b, weight } of kept) {
-			const p = b.pose.worldToLocal(new Vector2(w.x, w.y));
-			out.push(b.index, round(p.x), round(p.y), weight);
-		}
+		return scored
+			.map((e, k) => ({ index: e.b.index, pose: e.b.pose, weight: weights[k] }))
+			.filter((e) => e.weight > 0)
+			.sort((p, q) => p.index - q.index);
+	};
+}
+
+/** Weighted vertex data for one world point: count, then bone index, local x, local y, weight per bone. */
+function weighted(x: number, y: number, kept: Influence[]): number[] {
+	const out = [kept.length];
+	for (const { index, pose, weight } of kept) {
+		const p = pose.worldToLocal(new Vector2(x, y));
+		out.push(index, round(p.x), round(p.y), weight);
+	}
+	return out;
+}
+
+function weigh(ws: Workspace, slotBone: string, local: number[], boneNames: string[], maxInfluences: number): number[] {
+	const slotPose = boneByName(load(ws).skeleton, slotBone).appliedPose;
+	const of = influences(ws, boneNames, maxInfluences);
+	const out: number[] = [];
+	for (let i = 0; i < local.length; i += 2) {
+		const w = slotPose.localToWorld(new Vector2(local[i], local[i + 1]));
+		out.push(...weighted(w.x, w.y, of(w.x, w.y)));
 	}
 	return out;
 }
@@ -532,7 +668,13 @@ export function pathLengths(v: number[]): number[] {
 }
 
 /** Smooth path through world points (Catmull-Rom handles), in the bone's local space: [in, point, out] per point. */
-function pathThrough(ws: Workspace, bone: string, points: { x: number; y: number }[], closed: boolean): number[] {
+function pathThrough(
+	ws: Workspace,
+	bone: string,
+	points: { x: number; y: number }[],
+	closed: boolean,
+	weights?: { bones: string[]; maxInfluences: number },
+): { vertices: number[]; lengths: number[] } {
 	const frame = boneByName(load(ws).skeleton, bone).appliedPose;
 	const n = points.length;
 	const at = (i: number) => points[closed ? (i + n) % n : Math.max(0, Math.min(n - 1, i))];
@@ -545,12 +687,22 @@ function pathThrough(ws: Workspace, bone: string, points: { x: number; y: number
 		const ty = (b.y - a.y) * k;
 		world.push(p.x - tx, p.y - ty, p.x, p.y, p.x + tx, p.y + ty);
 	});
+	if (weights) {
+		// Handles take their point's weights so each point and its handles move as one under the bones.
+		const of = influences(ws, weights.bones, weights.maxInfluences);
+		const out: number[] = [];
+		for (let i = 0; i < world.length; i += 6) {
+			const kept = of(world[i + 2], world[i + 3]);
+			for (let k = 0; k < 6; k += 2) out.push(...weighted(world[i + k], world[i + k + 1], kept));
+		}
+		return { vertices: out, lengths: pathLengths(world) };
+	}
 	const local: number[] = [];
 	for (let i = 0; i < world.length; i += 2) {
 		const q = frame.worldToLocal(new Vector2(world[i], world[i + 1]));
 		local.push(round(q.x), round(q.y));
 	}
-	return local;
+	return { vertices: local, lengths: pathLengths(local) };
 }
 
 export function addConstraint(ws: Workspace, c: ConstraintJson): ConstraintJson {
@@ -562,7 +714,13 @@ export function addConstraint(ws: Workspace, c: ConstraintJson): ConstraintJson 
 	];
 	for (const b of boneRefs) findBone(ws, b);
 	if (c.type === "path") {
-		const { points, closed, pathBone, ...rest } = c as ConstraintJson & { points?: { x: number; y: number }[]; closed?: boolean; pathBone?: string };
+		const { points, closed, pathBone, pathBones, maxInfluences, ...rest } = c as ConstraintJson & {
+			points?: { x: number; y: number }[];
+			closed?: boolean;
+			pathBone?: string;
+			pathBones?: string[];
+			maxInfluences?: number;
+		};
 		const slotName = (rest.slot as string | undefined) ?? `${c.name}-path`;
 		const existing = ws.doc.slots.find((s) => s.name === slotName);
 		if (points) {
@@ -570,8 +728,16 @@ export function addConstraint(ws: Workspace, c: ConstraintJson): ConstraintJson 
 			if (points.length < 2) throw new UserError("a path needs at least 2 points");
 			const bone = pathBone ?? "root";
 			findBone(ws, bone);
-			const vertices = pathThrough(ws, bone, points, closed ?? false);
-			const path: AttachmentJson = { type: "path", vertexCount: vertices.length / 2, vertices, lengths: pathLengths(vertices) };
+			let weights: { bones: string[]; maxInfluences: number } | undefined;
+			if (pathBones?.length) {
+				for (const b of pathBones) findBone(ws, b);
+				const driven = new Set((c.bones as string[]).flatMap((b) => [...descendants(ws, b)]));
+				const loop = pathBones.filter((b) => driven.has(b));
+				if (loop.length) throw new UserError(`path bones ${loop.join(", ")} are moved by the constraint itself; use control bones outside the chain`);
+				weights = { bones: pathBones, maxInfluences: maxInfluences ?? 2 };
+			} else if (maxInfluences !== undefined) throw new UserError("maxInfluences needs pathBones");
+			const { vertices, lengths } = pathThrough(ws, bone, points, closed ?? false, weights);
+			const path: AttachmentJson = { type: "path", vertexCount: points.length * 3, vertices, lengths };
 			if (closed) path.closed = true;
 			ws.doc.slots.push({ name: slotName, bone, attachment: slotName });
 			(defaultSkin(ws).attachments[slotName] ??= {})[slotName] = path;

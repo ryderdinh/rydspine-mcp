@@ -177,8 +177,17 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Asset `chest`: nắp bật bằng bezier tự đưa, quầng sáng vẽ đè lên nắp khi mở, event `creak` (audio) và `sparkle`.
 - Test: 41 test đạt. `spine:check` 7/7: event của chest (3) và bước chân của hero (2 và 4) khớp sau khi qua Spine, thứ tự vẽ khớp mọi frame, lệch ≤ 0,0011.
 
+### 2026-10-31 (tiếp 7)
+
+- Tool `shape_add`: attachment `point` (vị trí, hướng theo world, đi theo xương), `boundingbox` và `clipping` trong slot mới. Hình là các điểm world, hoặc `around` dò viền ảnh (region) hay viền hull (mesh) của một slot, `padding` nới ra. Clipping che các slot từ `from` tới `end` và được đặt ngay dưới `from`; key thứ tự vẽ được tính lại (slot mới nằm ngay dưới slot phía trên nó trong setup).
+- Path constraint nhận `pathBones` (và `maxInfluences`, mặc định 2): mỗi điểm của đường cong gắn trọng số vào các xương điều khiển gần nhất, tay nắm theo trọng số của điểm. Từ chối xương thuộc chính chuỗi được path kéo (vòng lặp). Tách phần tính trọng số dùng chung với `mesh_generate`.
+- `preview` (khi hiện xương) vẽ bounding box nét đứt và point.
+- `spine:check` so thêm đỉnh của mọi attachment dạng đỉnh (bounding box, clipping, path) và vị trí/hướng của point.
+- Asset nghiệm thu: `tree` có dây leo treo trên nhánh, path gắn vào nhánh và xương đầu dây; `chest` có point `coin-spawn` trên nắp, vùng va chạm dò theo thân rương và clipping cho quầng sáng.
+- Test: 44 test đạt. `spine:check` 7/7, lệch ≤ 0,0011.
+
 ## Việc tiếp theo
 
 1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
-2. Path có trọng số theo vài xương điều khiển như trong ví dụ; `mirror_animation` / `mirror_bones`; pivot theo layer `[pivot]` khi import PSD; attachment `point` / `boundingbox` (ý tưởng từ `REFERENCES.md`).
+2. `mirror_animation` / `mirror_bones`; pivot theo layer `[pivot]` khi import PSD (ý tưởng từ `REFERENCES.md`).
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

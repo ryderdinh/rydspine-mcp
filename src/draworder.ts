@@ -62,7 +62,8 @@ export function offsetsToNames(slots: string[], offsets: DrawOrderOffset[] | und
 
 /**
  * Rewrites every draw order key after the setup slot order changes, so each key still shows the same
- * order. Slots that are gone are dropped; new slots keep their place next to the slot below them in setup.
+ * order. Slots that are gone are dropped; a new slot goes right below the slot above it in setup (a clipping
+ * stays under the first slot it masks), or on top when nothing is above it.
  */
 export function remapDrawOrders(animations: Record<string, AnimationJson>, before: string[], after: string[]): void {
 	for (const a of Object.values(animations)) {
@@ -70,11 +71,11 @@ export function remapDrawOrders(animations: Record<string, AnimationJson>, befor
 		if (!keys) continue;
 		for (const k of keys) {
 			const names = offsetsToNames(before, k.offsets).filter((n) => after.includes(n));
-			after.forEach((n, i) => {
-				if (names.includes(n)) return;
-				const below = i > 0 ? names.indexOf(after[i - 1]) : -1;
-				names.splice(below + 1, 0, n);
-			});
+			for (let i = after.length - 1; i >= 0; i--) {
+				if (names.includes(after[i])) continue;
+				const above = i + 1 < after.length ? names.indexOf(after[i + 1]) : -1;
+				names.splice(above < 0 ? names.length : above, 0, after[i]);
+			}
 			const offsets = orderToOffsets(after, names.map((n) => after.indexOf(n)));
 			if (offsets) k.offsets = offsets;
 			else delete k.offsets;

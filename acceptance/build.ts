@@ -226,6 +226,7 @@ async function tree(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 			part(paint, "leaves-left", ellipsePts(-84, 156, 42, 30), leaf),
 			part(paint, "leaves-right", ellipsePts(76, 184, 40, 28), [80, 170, 75]),
 			part(paint, "leaves-top", ellipsePts(-14, 230, 50, 36), [90, 180, 80]),
+			part(paint, "vine", strip([-70, 148], [-70, 64], 8, 5), [60, 130, 50]),
 		],
 	});
 	await ok("rig_template", { project, template: { kind: "chain", name: "trunk", points: [{ x: 0, y: 0 }, { x: 0, y: 180 }], segments: 3, slots: ["trunk"] } });
@@ -233,8 +234,26 @@ async function tree(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 		await ok("rig_template", { project, template: { kind: "chain", name: `${n}-`, parent, points: [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }], segments: 2, slots: [`branch-${n}`] } });
 		await ok("slot_update", { project, name: `leaves-${n}`, bone: `${n}-2` });
 	}
+	// A vine hangs from the left branch: its path is weighted to the branch and to a control bone at the
+	// tip (the vine example's setup), so the branch carries it and the control bone swings its end.
+	await ok("rig_template", { project, template: { kind: "chain", name: "vine", points: [{ x: -70, y: 148 }, { x: -70, y: 64 }], segments: 3, slots: ["vine"] } });
+	await ok("bone_add", { project, bones: [{ name: "vine-tip", x: -70, y: 64, space: "world" }] });
+	await ok("constraint_add", {
+		project,
+		constraint: {
+			type: "path",
+			name: "vine",
+			bones: ["vine1", "vine2", "vine3"],
+			points: [{ x: -70, y: 148 }, { x: -73, y: 106 }, { x: -70, y: 64 }],
+			pathBones: ["left-2", "vine-tip"],
+			spacingMode: "percent",
+			spacing: 0.33,
+			rotateMode: "chainScale",
+		},
+	});
 	const end = 3;
 	await ok("anim_create", { project, name: "wind", loop: true });
+	await ok("anim_oscillate", { project, animation: "wind", bones: ["vine-tip"], property: "translatex", amplitude: 10, period: 1.5, end, phase: 0.2 });
 	await ok("anim_oscillate", { project, animation: "wind", bones: ["trunk1", "trunk2", "trunk3"], property: "rotate", amplitude: 1.5, center: -1.5, period: 3, end, delayPerBone: 0.2, falloff: 1.4 });
 	await ok("anim_oscillate", { project, animation: "wind", bones: ["left-1", "left-2"], property: "rotate", amplitude: 5, period: 1.5, end, delayPerBone: 0.12 });
 	await ok("anim_oscillate", { project, animation: "wind", bones: ["right-1", "right-2"], property: "rotate", amplitude: 6, period: 1, end, delayPerBone: 0.1, phase: 0.3 });
@@ -260,6 +279,11 @@ async function chest(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	await ok("bone_add", { project, bones: [{ name: "chest", x: 0, y: 0, space: "world" }] });
 	for (const slot of ["glow", "box", "lock"]) await ok("slot_update", { project, name: slot, bone: "chest" });
 	await ok("rig_template", { project, template: { kind: "hinge", name: "lid", parent: "chest", pivot: { x: -62, y: 60 }, tip: { x: 62, y: 60 }, slots: ["lid"] } });
+	// Game hooks: where coins spawn (rides the lid), a hit area traced from the box, and a mask that keeps
+	// the glow inside the chest's opening.
+	await ok("shape_add", { project, type: "point", name: "coin-spawn", bone: "lid", x: 30, y: 96, rotation: 90 });
+	await ok("shape_add", { project, type: "boundingbox", name: "hit", around: "box" });
+	await ok("shape_add", { project, type: "clipping", name: "opening", bone: "chest", end: "glow", points: [{ x: -60, y: 20 }, { x: 60, y: 20 }, { x: 70, y: 150 }, { x: -70, y: 150 }] });
 	await ok("anim_create", { project, name: "open", loop: false });
 	// A custom bezier: the lid snaps open fast and eases into the top of its swing.
 	await ok("anim_tween", { project, animation: "open", bones: ["lid"], property: "rotate", to: 72, start: 0.15, duration: 0.3, ease: [0.15, 0.85, 0.35, 1] });

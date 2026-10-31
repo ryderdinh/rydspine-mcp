@@ -31,6 +31,7 @@ import { importPsd } from "./psd.js";
 import {
 	addBone,
 	addConstraint,
+	addShape,
 	importSequence,
 	assertUnlocked,
 	describe,
@@ -427,6 +428,37 @@ export function createServer(): McpServer {
 	);
 
 	server.registerTool(
+		"shape_add",
+		{
+			description:
+				"Add a point (a marker the game reads: muzzle, hand grip, spawn spot), a bounding box (hit area) or a " +
+				"clipping mask, each in a new slot. Shapes are world points, or around=<slot> traces that slot's image " +
+				"outline or mesh hull. A clipping masks the slots from `from` (default end) up to `end` and is placed " +
+				"right below `from`.",
+			inputSchema: {
+				project,
+				type: z.enum(["point", "boundingbox", "clipping"]),
+				name: z.string().describe("attachment and new slot name"),
+				bone: z.string().optional().describe("bone the slot follows (default: the bone of around, else root)"),
+				x: z.number().optional().describe("point: world x (default the bone's origin)"),
+				y: z.number().optional(),
+				rotation: z.number().optional().describe("point: world rotation in degrees"),
+				points: z.array(point).min(3).optional().describe("boundingbox/clipping: world polygon"),
+				around: z.string().optional().describe("boundingbox/clipping: trace this slot's art instead of points"),
+				padding: z.number().min(0).max(32).optional().describe("around: grow the outline by px (default 2)"),
+				from: z.string().optional().describe("clipping: first slot masked"),
+				end: z.string().optional().describe("clipping: last slot masked (required)"),
+			},
+		},
+		({ project, ...spec }) =>
+			edit(project, `add ${spec.type} ${spec.name}`, (ws) => {
+				const r = addShape(ws, spec);
+				const what = spec.type === "point" ? "point" : `${r.vertices} vertices`;
+				return [`${spec.type} ${r.slot}: ${what}`, ...r.warnings.map((w) => `warning: ${w}`)].join("\n");
+			}),
+	);
+
+	server.registerTool(
 		"mesh_generate",
 		{
 			description:
@@ -513,6 +545,11 @@ export function createServer(): McpServer {
 					.describe("world points the path passes through, read off the art; creates slot <name>-path with a smooth path"),
 				closed: z.boolean().optional().describe("loop the path (treads, conveyor belts)"),
 				pathBone: z.string().optional().describe("bone the new path slot follows (default root); bones on it bend the path"),
+				pathBones: z
+					.array(z.string())
+					.optional()
+					.describe("control bones that bend the new path, each point weighted to the nearest (like Spine's examples); not bones on the chain"),
+				maxInfluences: z.number().int().min(1).max(4).optional().describe("bones per path point with pathBones (default 2)"),
 				slot: z.string().optional().describe("existing slot holding a path attachment, instead of points"),
 				positionMode: z.enum(["percent", "fixed"]).optional(),
 				spacingMode: z.enum(["length", "fixed", "percent", "proportional"]).optional(),

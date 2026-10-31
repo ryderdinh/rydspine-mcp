@@ -193,7 +193,7 @@ describe("rydspine end to end", () => {
 		const dir = join(root, project, "export");
 		for (const f of ["critter.json", "critter.atlas", "critter.png", "critter.html"]) expect(existsSync(join(dir, f))).toBe(true);
 		const json = JSON.parse(readFileSync(join(dir, "critter.json"), "utf8"));
-		expect(json.skeleton.spine).toBe("4.3.75-beta");
+		expect(json.skeleton.spine).toBe("4.3.26");
 		expect(r.text).toContain("exported");
 
 		const { chromium } = createRequire(import.meta.url)("playwright");

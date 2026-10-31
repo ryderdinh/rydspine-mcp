@@ -108,7 +108,7 @@ export interface ProjectMeta {
 }
 
 /** Editor version written into new skeletons; matches the Spine Editor the JSON will be imported into. */
-export const SPINE_VERSION = process.env.RYDSPINE_SPINE_VERSION ?? "4.3.75-beta";
+export const SPINE_VERSION = process.env.RYDSPINE_SPINE_VERSION ?? "4.3.26";
 
 export function emptySkeleton(): SkeletonDoc {
 	return {

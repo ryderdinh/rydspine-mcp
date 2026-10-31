@@ -1,6 +1,6 @@
 // Preview: renders posed frames to SVG (and PNG through a headless browser when available),
 // and exports a self-contained HTML page running the official Spine web player.
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { ClippingAttachment, MeshAttachment, RegionAttachment } from "@esotericsoftware/spine-core";
@@ -214,14 +214,15 @@ export function exportProject(ws: Workspace, outDir?: string): { dir: string; fi
 	const name = ws.meta.name;
 	const packed = pack(ws.imagesDir, ws.imageNames(), `${name}.png`);
 	const page = composePage(ws.imagesDir, packed);
-	const doc = { ...ws.doc, skeleton: { ...ws.doc.skeleton, hash: `rydspine-v${ws.meta.version}` } };
-	delete doc.skeleton.images;
+	// Runtimes use the atlas; Spine Editor's Import Data reads the loose images next to the JSON.
+	const doc = { ...ws.doc, skeleton: { ...ws.doc.skeleton, hash: `rydspine-v${ws.meta.version}`, images: "./images/" } };
+	cpSync(ws.imagesDir, join(dir, "images"), { recursive: true });
 	const json = `${JSON.stringify(doc, null, 2)}\n`;
 	writeFileSync(join(dir, `${name}.json`), json);
 	writeFileSync(join(dir, `${name}.atlas`), packed.text);
 	writeFileSync(join(dir, `${name}.png`), page);
 	writeFileSync(join(dir, `${name}.html`), playerHtml(ws, json, packed.text, page));
-	return { dir, files: [`${name}.json`, `${name}.atlas`, `${name}.png`, `${name}.html`] };
+	return { dir, files: [`${name}.json`, `${name}.atlas`, `${name}.png`, `${name}.html`, "images/"] };
 }
 
 function playerHtml(ws: Workspace, json: string, atlas: string, page: Buffer): string {

@@ -46,6 +46,8 @@ Chạy `npm run ui` (hoặc gọi tool `ui_open`) rồi mở http://127.0.0.1:51
 
 Chạy `npm run acceptance` để dựng 8 asset mẫu (nhân vật, rồng, cây, rương, xe, logo, đèn lồng, cua) qua tool MCP. Kết quả nằm trong `acceptance/out/`: file xuất cho từng asset, `report.json` và trang `studio-local.html`.
 
+Chạy `npm run real:art` để nghiệm thu trên art thật: con rồng trong bộ ví dụ của Spine (art của Thiago Brayner, chỉ dùng để trình diễn). Script dựng PSD giống file họa sĩ giao (layer phẳng, marker `[pivot]`), rig và làm animation bay hoàn toàn qua tool MCP, rồi so tư thế setup với bản gốc theo từng điểm ảnh. Có `SPINE_CLI` thì kiểm thêm vòng qua Spine Editor. Art chỉ nằm trong `~/.cache` và `acceptance/out/`, không commit hay đăng lên đâu.
+
 Chạy `npm run spine:check` để kiểm 8 asset bằng Spine Editor thật: Spine import từng file JSON, xuất lại, rồi runtime so hai bản từng khung; Spine cũng vẽ dải khung hình cho mỗi animation. Cần đặt `SPINE_CLI` trỏ tới Spine (ví dụ `/Applications/Spine.app/Contents/MacOS/Spine`), hoặc trên Linux đặt `SPINE_ACTIVATION_CODE` để script tự tải Spine. Thiếu cả hai thì bỏ qua.
 
 Chạy `npm run skel:examples` để kiểm phần đọc `.skel` trên bộ ví dụ chính thức của Spine (tải thưa từ `github.com/EsotericSoftware/spine-runtimes`, nhánh 4.3): mỗi file được chuyển sang JSON rồi so với runtime đọc thẳng `.skel`, từng khung. `npx tsx acceptance/skel-fixture.ts` tạo lại `test/fixtures/features` bằng Spine thật.

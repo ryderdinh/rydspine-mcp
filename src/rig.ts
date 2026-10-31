@@ -110,12 +110,17 @@ export function addBone(ws: Workspace, spec: BoneSpec): BoneJson {
 export interface BoneUpdate extends Partial<Omit<BoneSpec, "name">> {
 	name: string;
 	rename?: string;
+	/** Keep child bones and the bone's attachments where they are in the world (Spine's "compensate"). */
+	compensate?: boolean;
 }
 
 export function updateBone(ws: Workspace, u: BoneUpdate): BoneJson {
 	assertUnlocked(ws, "bones", [u.name]);
 	const bone = findBone(ws, u.name);
 	if (bone.name === "root" && (u.parent || u.rename)) throw new UserError("root bone cannot be reparented or renamed");
+	if (u.compensate && (u.scaleX !== undefined || u.scaleY !== undefined))
+		throw new UserError("compensate keeps things in place through moves and turns, not scale changes; scale without it");
+	const kept = u.compensate ? compensated(ws, bone.name) : undefined;
 
 	if (u.parent && u.parent !== bone.parent) {
 		findBone(ws, u.parent);
@@ -147,9 +152,22 @@ export function updateBone(ws: Workspace, u: BoneUpdate): BoneJson {
 	if (u.scaleX !== undefined) bone.scaleX = u.scaleX;
 	if (u.scaleY !== undefined) bone.scaleY = u.scaleY;
 	if (u.color !== undefined) bone.color = u.color;
+	kept?.();
 
 	if (u.rename) renameBone(ws, bone.name, checkName("bone", u.rename));
 	return bone;
+}
+
+/** Records what hangs off a bone; the returned function puts it back in place after the bone has changed. */
+function compensated(ws: Workspace, name: string): () => void {
+	const before = boneByName(load(ws).skeleton, name).appliedPose;
+	const children = ws.doc.bones.filter((b) => b.parent === name).map((b) => ({ bone: b, world: boneWorld(ws, b.name) }));
+	const slots = ws.doc.slots.filter((s) => s.bone === name).map((s) => s.name);
+	return () => {
+		const after = boneByName(load(ws).skeleton, name).appliedPose;
+		for (const slot of slots) moveAttachments(ws, slot, before, after);
+		for (const { bone, world } of children) Object.assign(bone, toLocal(after, world.x, world.y, world.rotation));
+	};
 }
 
 function renameBone(ws: Workspace, from: string, to: string): void {
@@ -428,24 +446,7 @@ export function updateSlot(ws: Workspace, u: SlotUpdate): SlotJson {
 		findBone(ws, u.bone);
 		if (u.keepWorld !== false) {
 			const skeleton = load(ws).skeleton;
-			const from = boneByName(skeleton, slot.bone).appliedPose;
-			const to = boneByName(skeleton, u.bone).appliedPose;
-			for (const skin of ws.doc.skins) {
-				for (const att of Object.values(skin.attachments[slot.name] ?? {})) {
-					if (att.type === undefined || att.type === "region") {
-						const r = att as RegionJson;
-						const w = toWorld(from, r.x ?? 0, r.y ?? 0, r.rotation ?? 0);
-						Object.assign(r, toLocal(to, w.x, w.y, w.rotation));
-					} else if (att.type === "mesh" && !isWeighted(att as MeshJson)) {
-						const m = att as MeshJson;
-						for (let i = 0; i < m.vertices.length; i += 2) {
-							const p = to.worldToLocal(from.localToWorld(new Vector2(m.vertices[i], m.vertices[i + 1])));
-							m.vertices[i] = round(p.x);
-							m.vertices[i + 1] = round(p.y);
-						}
-					}
-				}
-			}
+			moveAttachments(ws, slot.name, boneByName(skeleton, slot.bone).appliedPose, boneByName(skeleton, u.bone).appliedPose);
 		}
 		slot.bone = u.bone;
 	}
@@ -464,6 +465,26 @@ export function updateSlot(ws: Workspace, u: SlotUpdate): SlotJson {
 		remapDrawOrders(ws.doc.animations, before, ws.doc.slots.map((s) => s.name));
 	}
 	return slot;
+}
+
+/** Re-expresses a slot's regions and unweighted meshes from one bone frame in another, keeping them in place. */
+function moveAttachments(ws: Workspace, slot: string, from: BonePose, to: BonePose): void {
+	for (const skin of ws.doc.skins) {
+		for (const att of Object.values(skin.attachments[slot] ?? {})) {
+			if (att.type === undefined || att.type === "region") {
+				const r = att as RegionJson;
+				const w = toWorld(from, r.x ?? 0, r.y ?? 0, r.rotation ?? 0);
+				Object.assign(r, toLocal(to, w.x, w.y, w.rotation));
+			} else if (att.type === "mesh" && !isWeighted(att as MeshJson)) {
+				const m = att as MeshJson;
+				for (let i = 0; i < m.vertices.length; i += 2) {
+					const p = to.worldToLocal(from.localToWorld(new Vector2(m.vertices[i], m.vertices[i + 1])));
+					m.vertices[i] = round(p.x);
+					m.vertices[i + 1] = round(p.y);
+				}
+			}
+		}
+	}
 }
 
 function isWeighted(m: MeshJson): boolean {

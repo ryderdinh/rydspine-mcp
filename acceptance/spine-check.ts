@@ -140,36 +140,38 @@ export interface SpineCheck {
 	log: string;
 }
 
+/** Imports one exported JSON into Spine, exports it again and compares both; Spine also renders contact sheets into dir. */
+export function roundTrip(base: string[], original: string, name: string, animationNames: string[], dir: string): SpineCheck {
+	rmSync(dir, { recursive: true, force: true });
+	mkdirSync(dir, { recursive: true });
+	const project = join(dir, `${name}.spine`);
+	let log = spine(base, ["-i", original, "-o", project, "-r"]);
+	// Nonessential data keeps mesh internal edges, bone colors and other editor-only fields.
+	log += spine(base, ["-i", project, "-o", join(dir, "export"), "--set", "nonessential=true", "-e", "json"]);
+	const exported = join(dir, "export", `${name}.json`);
+	const warnings = log.split("\n").filter((l) => /^WARNING/.test(l));
+	const a = read(original);
+	const b = read(exported);
+	const animations = a.animations.map((anim) => compareAnimation(name, a, b, anim.name));
+	const problems = [...warnings, ...compareStructure(a, b), ...animations.flatMap((c) => c.problems.map((p) => `${c.animation}: ${p}`))];
+	let sheets: string[] = [];
+	try {
+		sheets = renderSheets(base, project, name, animationNames, dir);
+	} catch (e) {
+		// The reason is at the end of Spine's output, after the launcher banner.
+		problems.push(`image export: ${(e as Error).message.split("\n").filter(Boolean).slice(-4).join(" | ")}`);
+	}
+	return { asset: name, ok: problems.length === 0, problems, animations, sheets, log };
+}
+
 export async function spineCheck(outDir: string): Promise<SpineCheck[] | null> {
 	const base = launcher();
 	if (!base) return null;
 	const exported = join(outDir, "assets");
 	const reports = await buildAll(exported);
-	const results: SpineCheck[] = [];
-	for (const r of reports) {
-		const original = join(exported, r.project, `${r.project}.json`);
-		const dir = join(outDir, "spine", r.project);
-		rmSync(dir, { recursive: true, force: true });
-		mkdirSync(dir, { recursive: true });
-		const project = join(dir, `${r.project}.spine`);
-		let log = spine(base, ["-i", original, "-o", project, "-r"]);
-		// Nonessential data keeps mesh internal edges, bone colors and other editor-only fields.
-		log += spine(base, ["-i", project, "-o", join(dir, "export"), "--set", "nonessential=true", "-e", "json"]);
-		const roundTrip = join(dir, "export", `${r.project}.json`);
-		const warnings = log.split("\n").filter((l) => /^WARNING/.test(l));
-		const a = read(original);
-		const b = read(roundTrip);
-		const animations = a.animations.map((anim) => compareAnimation(r.project, a, b, anim.name));
-		const problems = [...warnings, ...compareStructure(a, b), ...animations.flatMap((c) => c.problems.map((p) => `${c.animation}: ${p}`))];
-		let sheets: string[] = [];
-		try {
-			sheets = renderSheets(base, project, r.project, r.animations, dir);
-		} catch (e) {
-			// The reason is at the end of Spine's output, after the launcher banner.
-			problems.push(`image export: ${(e as Error).message.split("\n").filter(Boolean).slice(-4).join(" | ")}`);
-		}
-		results.push({ asset: r.project, ok: problems.length === 0, problems, animations, sheets, log });
-	}
+	const results = reports.map((r) =>
+		roundTrip(base, join(exported, r.project, `${r.project}.json`), r.project, r.animations, join(outDir, "spine", r.project)),
+	);
 	writeFileSync(join(outDir, "spine-check.json"), `${JSON.stringify(results, null, 2)}\n`);
 	return results;
 }

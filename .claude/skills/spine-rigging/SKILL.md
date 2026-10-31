@@ -14,7 +14,9 @@ stretchyman, tank, vine, sack, celestial-circus, diamond, …). Read the art fir
 1. `project_create` or `project_import` (JSON or `.skel`), then `image_import` / `psd_import`. Look at the
    parts with `image_view`; read joint positions off the art in world pixels. PSD layers named `<name>[pivot]`
    (a dot, may be hidden) already make bones for the layer/group `<name>`, nested like the groups: check the
-   bone list psd_import prints, then reparent with `bone_update` (e.g. arms under the body).
+   bone list psd_import prints, then reparent with `bone_update` (e.g. arms under the body). Pivot bones have
+   no length or direction: aim them with `bone_update` (`rotation`, `length`, `space: "world"`,
+   `compensate: true` so parts and child bones stay put). Physics `rotate` needs a bone with length.
 2. Bones: prefer `rig_template` (chain, hinge, wheel, limb, biped, quadruped) over `bone_add` one by one.
    Give world points (`{x, y}`) read from the art.
 3. Bind slots (`slot_update`, `keepWorld` keeps the art in place); fix draw order (0 = back).

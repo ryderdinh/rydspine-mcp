@@ -12,7 +12,8 @@
     "acceptance": "tsx acceptance/build.ts",
     "spine:check": "tsx acceptance/spine-check.ts",
     "ui": "tsx src/ui.ts",
-    "skel:examples": "tsx acceptance/skel-examples.ts"
+    "skel:examples": "tsx acceptance/skel-examples.ts",
+    "real:art": "tsx acceptance/real-art.ts"
   },
   "dependencies": {
     "@esotericsoftware/spine-core": "4.3.13",

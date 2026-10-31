@@ -244,8 +244,16 @@ export function createServer(): McpServer {
 	server.registerTool(
 		"bone_update",
 		{
-			description: "Move, reparent (keeps world position), rename or resize a bone.",
-			inputSchema: { project, name: z.string(), rename: z.string().optional(), ...boneShape },
+			description:
+				"Move, reparent (keeps world position), rename or resize a bone. compensate=true keeps its child bones " +
+				"and its slots' regions and unweighted meshes where they are, e.g. to aim a bone placed by a [pivot] marker.",
+			inputSchema: {
+				project,
+				name: z.string(),
+				rename: z.string().optional(),
+				...boneShape,
+				compensate: z.boolean().optional().describe("Keep children and attachments in place in the world"),
+			},
 		},
 		(args) => edit(args.project, `update bone ${args.name}`, (ws) => void updateBone(ws, args)),
 	);

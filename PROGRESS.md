@@ -13,7 +13,7 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 | 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
 | 5. Kiểm tra & preview | ✅ Xong bản đầu | validate (kể cả mesh bị gập, ép dẹt, kéo giãn), kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio** |
 | 6. Chỉnh sửa | ✅ Xong bản đầu | Khóa, revert, sửa theo khoảng thời gian, so sánh phiên bản (`history_diff`), nhập lại JSON đã sửa trong Spine (`project_sync`) |
-| 7. Đầu ra & nghiệm thu | 🟡 Một phần | Bộ 6 asset nghiệm thu chạy tự động và đạt hết kiểm tra, nhưng dùng art tự vẽ. Cả 8 asset đã qua vòng Spine Editor 4.3.26 thật (`npm run spine:check`), chạy được cả trên máy Mac của người dùng. Chưa nghiệm thu trên art thật |
+| 7. Đầu ra & nghiệm thu | 🟡 Gần xong | Bộ 8 asset nghiệm thu (art tự vẽ) chạy tự động và đạt hết kiểm tra. Cả 8 asset đã qua vòng Spine Editor 4.3.26 thật (`npm run spine:check`), chạy được cả trên máy Mac của người dùng. Đã nghiệm thu trên art thật (rồng của Spine, `npm run real:art`); còn chờ art của người dùng |
 
 ## Quyết định đã chốt
 
@@ -204,7 +204,17 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Test: 45/49 đạt trên máy Mac. 4 test lỗi vì máy chưa cài gói `playwright` (cần cho preview PNG và trang player); trên `main` sạch cũng lỗi y như vậy.
 - `playwright` 1.64.1 thành devDependency (cài Chromium: `npx playwright install chromium`). Lỗi lộ ra sau đó: test trang player mất WebGL context (`getParameter` trả `null`) vì cờ cũ `--use-gl=swiftshader`. Trên Chromium 156 (macOS), cờ này hỏng khi đã có vài lần mở Chromium trước trong cùng tiến trình (do preview). Đổi sang `--use-angle=swiftshader`. Test: 49/49 đạt trên máy Mac.
 
+### 2026-10-31 (tiếp 10)
+
+- Nghiệm thu trên art thật: `npm run real:art` (`acceptance/real-art.ts`) dùng con rồng trong bộ ví dụ của Spine (art của Thiago Brayner; giấy phép chỉ cho trình diễn, không phát tán, không làm tác phẩm phái sinh, nên chỉ tải vào `~/.cache/rydspine/spine-art`, kết quả nằm trong `acceptance/out/`).
+  - Bộ ví dụ không có PSD, nên script dựng PSD giống file họa sĩ giao: 30 bộ phận vẽ đúng chỗ (xoay như tư thế setup gốc), layer phẳng theo thứ tự vẽ, chấm `<phần>[pivot]` ẩn ở mỗi khớp; cánh là chuỗi 9 frame.
+  - Chỉ dùng tool MCP: `psd_import`, `bone_add` (khớp không có hình), `bone_update` (cây xương, hướng và độ dài), `sequence_import` cho cánh, physics cho đuôi, animation `fly` 0,9 s (cánh lặp 9 frame, thân nhún, cổ/đầu/hàm/chân/đuôi lệch pha).
+  - Kết quả: tư thế setup trùng bản gốc 99,99% vùng đặc, lệch màu trung bình 0,31/255; 32 xương nằm đúng khớp (lệch ≤ 0,63 px vì chấm pivot là số nguyên) và đúng hướng (≤ 0,005°); validate đạt, vòng lặp khớp; qua Spine Editor lệch 0,0000.
+- Thiếu sót lộ ra nhờ art thật: xương tạo từ pivot dài 0, góc 0, nên physics `rotate` không có tác dụng; đổi góc xương thì kéo hình và xương con theo. Thêm `bone_update` `compensate: true` (như "Compensate" của Spine Editor): hình (region, mesh không trọng số) và xương con giữ nguyên chỗ khi xương dời hoặc xoay; từ chối khi đổi scale (region không biểu diễn được kéo giãn theo trục xoay). Test `test/compensate.test.ts`.
+- `spine-check.ts` tách hàm `roundTrip` dùng chung.
+- Test: 50/50 đạt.
+
 ## Việc tiếp theo
 
-1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
+1. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
 2. Tách ảnh phẳng thành bộ phận (để sau v1).

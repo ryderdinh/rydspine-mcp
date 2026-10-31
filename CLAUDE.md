@@ -4,7 +4,7 @@
 - **Báo người dùng khi context đã bị compact.** Ngay khi thấy cuộc trò chuyện vừa được tóm tắt (compact), câu đầu tiên của tin nhắn tiếp theo phải nói rõ: "Context vừa được compact", kèm việc đang làm dở. Không làm tiếp im lặng.
 - Tiến độ và việc tiếp theo nằm trong `PROGRESS.md`; cập nhật file này sau mỗi phần việc. Kế hoạch: `PLAN.md`. Yêu cầu: `REQUIREMENTS.md`.
 - Trả lời người dùng bằng tiếng Việt.
-- Chỉ commit và push khi xong một phần việc; chỉ tạo PR hoặc merge khi người dùng yêu cầu.
+- Chỉ commit và push khi xong một phần việc. Xong việc thì tự merge nhánh vào `main` (`--no-ff`, chạy test sau merge) và push, không cần hỏi; chỉ tạo PR khi người dùng yêu cầu.
 - `SPINE_ACTIVATION_CODE` chỉ được đọc từ biến môi trường: không in ra, không ghi vào code, git hay file kết quả. Che mã trong mọi output (`sed "s/$SPINE_ACTIVATION_CODE/<CODE>/g"`).
 - Kiểm tra bằng Spine Editor thật: `npm run spine:check` (cần mạng tới `*.esotericsoftware.com` và gói `x11-xserver-utils`).
 - Kiểm phần đọc `.skel` trên ví dụ chính thức của Spine: `npm run skel:examples`. Cách rig theo ví dụ của Spine: skill `.claude/skills/spine-rigging/SKILL.md` (cập nhật khi học thêm mẫu mới).

@@ -75,6 +75,64 @@ export function play(loaded: Loaded, animationName: string, frames: number, visi
 	}
 }
 
+const SQUASH = 0.15;
+const STRETCH = 6;
+
+interface MeshRef {
+	slot: number;
+	name: string;
+	mesh: MeshAttachment;
+	/** Signed world-space area of each triangle in the setup pose. */
+	ref: number[];
+}
+
+interface Distortion {
+	flipped: number;
+	min: number;
+	max: number;
+	time: number;
+}
+
+function triangleAreas(skeleton: Skeleton, slotIndex: number, mesh: MeshAttachment): number[] {
+	const n = mesh.worldVerticesLength;
+	const v = new Array<number>(n);
+	mesh.computeWorldVertices(skeleton, skeleton.slots[slotIndex], 0, n, v, 0, 2);
+	const t = mesh.triangles;
+	const out: number[] = [];
+	for (let i = 0; i < t.length; i += 3) {
+		const [a, b, c] = [t[i] * 2, t[i + 1] * 2, t[i + 2] * 2];
+		out.push(((v[b] - v[a]) * (v[c + 1] - v[a + 1]) - (v[c] - v[a]) * (v[b + 1] - v[a + 1])) / 2);
+	}
+	return out;
+}
+
+/** Every mesh attachment with its setup-pose triangle areas, to measure deformation against. */
+function meshRefs(loaded: Loaded): MeshRef[] {
+	const { data, skeleton } = loaded;
+	skeleton.setupPose();
+	skeleton.updateWorldTransform(Physics.none);
+	const refs: MeshRef[] = [];
+	for (const skin of data.skins)
+		for (const entry of skin.getAttachments())
+			if (entry.attachment instanceof MeshAttachment)
+				refs.push({ slot: entry.slotIndex, name: entry.placeholder, mesh: entry.attachment, ref: triangleAreas(skeleton, entry.slotIndex, entry.attachment) });
+	return refs;
+}
+
+/**
+ * Per-triangle area change relative to the mesh's median change, so uniform scaling, mirroring or a
+ * pop-in from zero are not counted; only parts of the mesh that fold, collapse or balloon are.
+ */
+function distortion(skeleton: Skeleton, ref: MeshRef, time: number): Distortion | null {
+	const areas = triangleAreas(skeleton, ref.slot, ref.mesh);
+	const ratios = areas.map((a, i) => (Math.abs(ref.ref[i]) > 1e-6 ? a / ref.ref[i] : Number.NaN)).filter((r) => !Number.isNaN(r));
+	if (!ratios.length) return null;
+	const median = [...ratios].sort((a, b) => a - b)[Math.floor(ratios.length / 2)];
+	if (Math.abs(median) < 1e-3) return null;
+	const q = ratios.map((r) => r / median);
+	return { flipped: q.filter((x) => x < 0).length, min: Math.min(...q.map((x) => Math.max(x, 0))), max: Math.max(...q), time };
+}
+
 export interface Report {
 	ok: boolean;
 	errors: string[];
@@ -93,6 +151,7 @@ export function validate(ws: Workspace): Report {
 		return { ok: false, errors: [(e as Error).message], warnings, info };
 	}
 	const { data, skeleton } = loaded;
+	const meshes = meshRefs(loaded);
 	info.push(
 		`${data.bones.length} bones, ${data.slots.length} slots, ${data.constraints.length} constraints, ` +
 			`${data.animations.length} animations`,
@@ -127,6 +186,7 @@ export function validate(ws: Workspace): Report {
 		}
 		const frames = Math.max(1, Math.round(animation.duration * FPS));
 		let bad = false;
+		const worst = new Map<MeshRef, Distortion>();
 		play(loaded, name, frames, (frame) => {
 			if (bad) return;
 			for (const b of skeleton.bones) {
@@ -137,7 +197,26 @@ export function validate(ws: Workspace): Report {
 					return;
 				}
 			}
+			for (const ref of meshes) {
+				const slot = skeleton.slots[ref.slot];
+				if (slot.appliedPose.getAttachment() !== ref.mesh) continue;
+				const d = distortion(skeleton, ref, frame / FPS);
+				const prev = worst.get(ref);
+				if (d && (!prev || d.flipped > prev.flipped || d.min < prev.min || d.max > prev.max))
+					worst.set(ref, {
+						flipped: Math.max(d.flipped, prev?.flipped ?? 0),
+						min: Math.min(d.min, prev?.min ?? Infinity),
+						max: Math.max(d.max, prev?.max ?? 0),
+						time: d.flipped > (prev?.flipped ?? 0) || !prev ? d.time : prev.time,
+					});
+			}
 		});
+		for (const [ref, d] of worst) {
+			const where = `${name}: mesh ${ref.name} in slot ${skeleton.slots[ref.slot].data.name}`;
+			if (d.flipped) errors.push(`${where} folds over itself (${d.flipped} triangles flipped near ${d.time.toFixed(2)}s); reduce the rotation or add bones/weights there`);
+			else if (d.min < SQUASH) warnings.push(`${where} squashes a triangle to ${(d.min * 100).toFixed(0)}% of its area`);
+			else if (d.max > STRETCH) warnings.push(`${where} stretches a triangle to ${d.max.toFixed(1)}x its area`);
+		}
 		let line = `${name}: ${animation.duration.toFixed(3)}s`;
 		if (ws.meta.loops[name]) {
 			const seam = loopSeam(loaded, name, animation.duration);

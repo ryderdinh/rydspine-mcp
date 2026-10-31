@@ -202,4 +202,26 @@ describe("rig_template", () => {
 		poseAt(loaded, "appear", 0.7);
 		expect(loaded.skeleton.findSlot("wheel")!.appliedPose.getAttachment()).toBeNull();
 	});
+
+	it("flags a mesh that folds over itself, but not uniform scaling", async () => {
+		const p = "banner";
+		await h.ok("project_create", { name: p });
+		await h.ok("image_import", { project: p, images: [{ path: shape(art, "banner", 160, 30, [200, 80, 80]), x: 80, y: 50 }] });
+		await h.ok("rig_template", {
+			project: p,
+			template: { kind: "chain", name: "cloth", points: [{ x: 0, y: 50 }, { x: 160, y: 50 }], segments: 4, slots: ["banner"] },
+		});
+		await h.ok("anim_create", { project: p, name: "fold", loop: false });
+		await h.ok("anim_tween", { project: p, animation: "fold", bones: ["cloth3"], property: "rotate", from: 0, to: 175, duration: 0.5 });
+		const v = await h.call("validate", { project: p });
+		expect(v.isError).toBe(true);
+		expect(v.text).toMatch(/fold: mesh banner in slot banner folds over itself/);
+		await h.ok("anim_remove", { project: p, name: "fold" });
+
+		// Popping in from nearly zero scale is uniform, so it is not deformation.
+		await h.ok("anim_create", { project: p, name: "grow", loop: false });
+		for (const property of ["scalex", "scaley"])
+			await h.ok("anim_tween", { project: p, animation: "grow", bones: ["root"], property, from: 0.01, to: 1, duration: 0.5 });
+		expect((await h.ok("validate", { project: p })).text).not.toMatch(/grow: mesh/);
+	});
 });

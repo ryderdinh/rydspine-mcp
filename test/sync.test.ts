@@ -46,5 +46,5 @@ it("syncs an edit made in Spine, reports the diff and can revert it", async () =
 it("rejects a sync from a binary file", async () => {
 	const r = await h.call("project_sync", { project: "coin", skeleton: join(COIN, "coin.png") });
 	expect(r.isError).toBe(true);
-	expect(r.text).toMatch(/only skeleton JSON/);
+	expect(r.text).toMatch(/\.json or binary \.skel/);
 });

@@ -24,6 +24,7 @@ import {
 	updateSlot,
 } from "./rig.js";
 import { footSlip, load, validate } from "./runtime.js";
+import { addVariant, createSkin, removeSkin } from "./skins.js";
 import * as templates from "./templates.js";
 import { startStudio } from "./ui.js";
 import type { ConstraintJson } from "./types.js";
@@ -468,6 +469,38 @@ export function createServer(): McpServer {
 	);
 
 	server.registerTool(
+		"skin_create",
+		{
+			description: "Create a skin (outfit, color scheme, equipment set). Optionally start from a copy of another skin.",
+			inputSchema: { project, name: z.string(), copyFrom: z.string().optional() },
+		},
+		({ project, name, copyFrom }) => edit(project, `create skin ${name}`, (ws) => createSkin(ws, name, copyFrom)),
+	);
+
+	server.registerTool(
+		"skin_variant",
+		{
+			description:
+				"In one skin, show a different image in a slot, placed like the default skin's attachment. Meshes become " +
+				"linked meshes, so the variant bends and deforms exactly like the original.",
+			inputSchema: {
+				project,
+				skin: z.string(),
+				slot: z.string(),
+				image: z.string().describe("PNG path to import, or an image already in the project"),
+				placeholder: z.string().optional().describe("Attachment to replace (default: the slot's setup attachment)"),
+			},
+		},
+		({ project, ...v }) => edit(project, `skin ${v.skin}: ${v.slot}`, (ws) => addVariant(ws, v)),
+	);
+
+	server.registerTool(
+		"skin_remove",
+		{ description: "Delete a skin.", inputSchema: { project, name: z.string() } },
+		({ project, name }) => edit(project, `remove skin ${name}`, (ws) => removeSkin(ws, name)),
+	);
+
+	server.registerTool(
 		"anim_create",
 		{
 			description: "Create an empty animation (replaces nothing if it exists).",
@@ -692,6 +725,7 @@ export function createServer(): McpServer {
 				frames: z.number().int().min(1).max(24).optional(),
 				times: z.array(z.number().min(0)).max(24).optional(),
 				showBones: z.boolean().optional(),
+				skin: z.string().optional().describe("Skin to show (default: the default skin)"),
 			},
 		},
 		({ project, ...spec }) =>
@@ -700,7 +734,7 @@ export function createServer(): McpServer {
 				const svg = renderSvg(ws, spec);
 				const dir = join(ws.dir, "previews");
 				mkdirSync(dir, { recursive: true });
-				const base = join(dir, `v${ws.meta.version}-${spec.animation ?? "setup"}`);
+				const base = join(dir, `v${ws.meta.version}-${spec.animation ?? "setup"}${spec.skin ? `@${spec.skin}` : ""}`);
 				writeFileSync(`${base}.svg`, svg);
 				const png = await rasterize(svg);
 				if (!png) return text(`Playwright is not available; SVG saved to ${base}.svg`);

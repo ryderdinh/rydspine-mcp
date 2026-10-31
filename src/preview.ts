@@ -130,10 +130,15 @@ export interface PreviewSpec {
 	frames?: number;
 	times?: number[];
 	showBones?: boolean;
+	skin?: string;
 }
 
 export function renderSvg(ws: Workspace, spec: PreviewSpec): string {
 	const loaded = load(ws);
+	if (spec.skin) {
+		if (!loaded.data.findSkin(spec.skin)) throw new UserError(`skin "${spec.skin}" not found`);
+		loaded.skeleton.setSkin(spec.skin);
+	}
 	const clipIds = { n: 0 };
 	const ids = imageIds(ws);
 	const showBones = spec.showBones ?? true;

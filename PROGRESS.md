@@ -8,8 +8,8 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 |---|---|---|
 | 0. Spike & chốt | ✅ Xong (trừ Spine CLI) | Runtime 4.3 chạy headless. Bỏ Spine CLI khỏi v1 vì máy người dùng không được cài Spine |
 | 1. Lõi | ✅ Xong bản đầu | MCP server, workspace, lịch sử phiên bản, validate, export |
-| 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận) và project Spine 4.3 có sẵn. Chưa đọc file binary `.skel`; ảnh phẳng chưa tách bộ phận để sau v1 |
-| 3. Rig | ✅ Xong bản đầu | Bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân) |
+| 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận), project Spine 4.3 có sẵn dạng JSON hoặc binary `.skel`. Ảnh phẳng chưa tách bộ phận để sau v1 |
+| 3. Rig | ✅ Xong bản đầu | Bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân), skin (bộ trang phục, biến thể) |
 | 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
 | 5. Kiểm tra & preview | ✅ Xong bản đầu | validate (kể cả mesh bị gập, ép dẹt, kéo giãn), kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio** |
 | 6. Chỉnh sửa | ✅ Xong bản đầu | Khóa, revert, sửa theo khoảng thời gian, so sánh phiên bản (`history_diff`), nhập lại JSON đã sửa trong Spine (`project_sync`) |
@@ -105,9 +105,21 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Mẫu rig 4 chân (`rig_template` kind `quadruped`): thân, cổ, đầu, 4 chân IK, đuôi tùy chọn. Đi 4 nhịp bằng `anim_gait`, không trượt chân. Cánh dùng mẫu chuỗi đốt.
 - Test: 27 test đạt.
 
+### 2026-10-31 (tiếp)
+- Đã merge đợt trước ([ryderdinh/rydspine-mcp#2](https://github.com/ryderdinh/rydspine-mcp/pull/2)).
+- `project_import` đọc được file binary `.skel`:
+  - dùng bộ đọc của runtime Spine rồi chuyển dữ liệu ngược lại thành JSON 4.3;
+  - đường cong được khôi phục chính xác từ các điểm lấy mẫu của runtime;
+  - test: file `coin-pro.skel` chuyển ra JSON chạy y hệt `coin-pro.json` ở mọi khung;
+  - chưa hỗ trợ transform/path/slider constraint và chuỗi ảnh (image sequence); gặp thì báo rõ.
+- Skin (`skin_create`, `skin_variant`, `skin_remove`):
+  - mỗi skin thay hình cho từng slot, giữ đúng vị trí hình gốc;
+  - phần dùng mesh thành linked mesh, uốn cong y như bản gốc;
+  - từ chối ảnh sai tỉ lệ; `preview` chọn được skin.
+- Test: 30 test đạt.
+
 ## Việc tiếp theo
 
 1. Nghiệm thu trên art thật khi có asset, và xác nhận Spine Editor nhập được JSON xuất ra.
-2. Đọc file binary `.skel` (cần chuyển dữ liệu runtime ngược lại thành JSON).
-3. Skin: tạo và đổi bộ trang phục / biến thể.
-4. Tách ảnh phẳng thành bộ phận (để sau v1).
+2. Hỗ trợ thêm khi đọc `.skel`: transform/path/slider constraint, chuỗi ảnh.
+3. Tách ảnh phẳng thành bộ phận (để sau v1).

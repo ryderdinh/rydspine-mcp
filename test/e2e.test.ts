@@ -262,7 +262,7 @@ describe("existing Spine project (coin, exported by Spine 4.3.75-beta)", () => {
 
 	it("rejects binary and pre-4.3 files with a clear message", async () => {
 		const bin = await call("project_import", { name: "bin", skeleton: join(COIN, "coin.png"), atlas: join(COIN, "coin.atlas") });
-		expect(bin.text).toMatch(/only skeleton JSON/);
+		expect(bin.text).toMatch(/\.json or binary \.skel/);
 	});
 });
 

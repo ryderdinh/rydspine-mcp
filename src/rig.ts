@@ -534,9 +534,11 @@ export interface MeshSpec extends ContourOptions {
 	rows?: number;
 	bones?: string[];
 	maxInfluences?: number;
+	/** Distance in px over which weights blend between neighboring bones (0: each vertex follows its nearest bone). */
+	smooth?: number;
 }
 
-/** Replaces a region attachment with a mesh, optionally weighted to bones by distance. */
+/** Replaces a region attachment (or rebuilds a mesh) with a mesh, optionally weighted to bones by distance. */
 export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number; triangles: number; warnings: string[] } {
 	assertUnlocked(ws, "slots", [spec.slot]);
 	const slot = findSlot(ws, spec.slot);
@@ -544,8 +546,8 @@ export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number;
 	const skin = defaultSkin(ws);
 	const att = skin.attachments[slot.name]?.[name];
 	if (!att) throw new UserError(`attachment "${name}" not found in slot "${slot.name}"`);
-	if (att.type !== undefined && att.type !== "region") throw new UserError(`attachment "${name}" is not a region`);
-	const r = att as RegionJson;
+	if (att.type !== undefined && att.type !== "region" && att.type !== "mesh") throw new UserError(`attachment "${name}" is not a region or mesh`);
+	const r = att.type === "mesh" ? regionOfMesh(ws, slot, name, att as MeshJson) : (att as RegionJson);
 
 	// Vertices as UVs (0..1, y down), hull first and in order around the outline.
 	let uv: [number, number][];
@@ -571,7 +573,7 @@ export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number;
 		local.push((r.x ?? 0) + ox * cos - oy * sin, (r.y ?? 0) + ox * sin + oy * cos);
 	}
 	let vertices = local.map(round);
-	if (spec.bones?.length) vertices = weigh(ws, slot.bone, local, spec.bones, spec.maxInfluences ?? 3);
+	if (spec.bones?.length) vertices = weigh(ws, slot.bone, local, spec.bones, spec.maxInfluences ?? 3, spec.smooth ?? 0);
 	const uvs = uv.flatMap(([u, v]) => [Math.round(u * 1e5) / 1e5, Math.round(v * 1e5) / 1e5]);
 	// Edges (vertex index * 2, pairs) are editor-only data; without them Spine Editor warns on import
 	// that the file was exported without nonessential data. The hull outline is the only edge loop.
@@ -580,6 +582,71 @@ export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number;
 	if (r.path) mesh.path = r.path;
 	skin.attachments[slot.name][name] = mesh;
 	return { vertices: uv.length, triangles: triangles.length / 3, warnings };
+}
+
+/** The region a mesh was cut from: fits the image rectangle to the setup-pose vertices, in the slot bone's space. */
+function regionOfMesh(ws: Workspace, slot: SlotJson, name: string, mesh: MeshJson): RegionJson {
+	for (const [anim, data] of Object.entries(ws.doc.animations)) {
+		const keyed = (data as { attachments?: Record<string, Record<string, Record<string, { deform?: unknown }>>> }).attachments;
+		if (Object.values(keyed ?? {}).some((slots) => slots[slot.name]?.[name]?.deform))
+			throw new UserError(`mesh "${name}" has deform keys in "${anim}"; rebuilding it would break them`);
+	}
+	const n = mesh.uvs.length / 2;
+	const local: [number, number][] = [];
+	if (mesh.vertices.length === mesh.uvs.length) for (let i = 0; i < n; i++) local.push([mesh.vertices[i * 2], mesh.vertices[i * 2 + 1]]);
+	else {
+		const skeleton = load(ws).skeleton;
+		const slotPose = boneByName(skeleton, slot.bone).appliedPose;
+		for (let i = 0, v = mesh.vertices; i < v.length; ) {
+			let x = 0;
+			let y = 0;
+			for (let count = v[i++]; count > 0; count--, i += 4) {
+				const w = skeleton.bones[v[i]].appliedPose.localToWorld(new Vector2(v[i + 1], v[i + 2]));
+				x += w.x * v[i + 3];
+				y += w.y * v[i + 3];
+			}
+			const p = slotPose.worldToLocal(new Vector2(x, y));
+			local.push([p.x, p.y]);
+		}
+	}
+	// Least squares for local = center + M * (image offset from its center, y up).
+	const img = Array.from({ length: n }, (_, i) => [(mesh.uvs[i * 2] - 0.5) * mesh.width, (0.5 - mesh.uvs[i * 2 + 1]) * mesh.height]);
+	const mean = (a: number[][], k: number) => a.reduce((s, p) => s + p[k], 0) / n;
+	const [pu, pv, cx, cy] = [mean(img, 0), mean(img, 1), mean(local, 0), mean(local, 1)];
+	let suu = 0;
+	let svv = 0;
+	let suv = 0;
+	const sx = [0, 0];
+	const sy = [0, 0];
+	img.forEach(([u, v], i) => {
+		const [du, dv, dx, dy] = [u - pu, v - pv, local[i][0] - cx, local[i][1] - cy];
+		suu += du * du;
+		svv += dv * dv;
+		suv += du * dv;
+		sx[0] += du * dx;
+		sx[1] += dv * dx;
+		sy[0] += du * dy;
+		sy[1] += dv * dy;
+	});
+	const det = suu * svv - suv * suv;
+	if (Math.abs(det) < 1e-9) throw new UserError(`mesh "${name}" is degenerate; cannot rebuild it`);
+	const solve = (s: number[]) => [(s[0] * svv - s[1] * suv) / det, (s[1] * suu - s[0] * suv) / det];
+	const [a, b] = solve(sx);
+	const [c, d] = solve(sy);
+	const rotation = (Math.atan2(c, a) * 180) / Math.PI;
+	const scaleX = Math.hypot(a, c);
+	const scaleY = Math.sign(a * d - b * c) * Math.hypot(b, d);
+	const region: RegionJson = {
+		x: round(cx - a * pu - b * pv),
+		y: round(cy - c * pu - d * pv),
+		width: mesh.width,
+		height: mesh.height,
+	} as RegionJson;
+	if (Math.abs(rotation) > 0.01) region.rotation = round(rotation);
+	if (Math.abs(scaleX - 1) > 1e-3) region.scaleX = Math.round(scaleX * 1e4) / 1e4;
+	if (Math.abs(scaleY - 1) > 1e-3) region.scaleY = Math.round(scaleY * 1e4) / 1e4;
+	if (mesh.path) region.path = mesh.path;
+	return region;
 }
 
 function gridMesh(cols: number, rows: number) {
@@ -611,7 +678,7 @@ interface Influence {
 }
 
 /** Inverse-square distance from a world point to each bone segment, keeping the strongest influences. */
-function influences(ws: Workspace, boneNames: string[], maxInfluences: number): (x: number, y: number) => Influence[] {
+function influences(ws: Workspace, boneNames: string[], maxInfluences: number, smooth = 0): (x: number, y: number) => Influence[] {
 	const skeleton = load(ws).skeleton;
 	const bones = boneNames.map((n) => {
 		const bone = boneByName(skeleton, n);
@@ -626,7 +693,7 @@ function influences(ws: Workspace, boneNames: string[], maxInfluences: number): 
 				const dy = b.by - b.ay;
 				const t = Math.max(0, Math.min(1, ((x - b.ax) * dx + (y - b.ay) * dy) / (dx * dx + dy * dy || 1)));
 				const d = Math.hypot(x - (b.ax + t * dx), y - (b.ay + t * dy));
-				return { b, score: 1 / (d * d + 1) };
+				return { b, score: 1 / (d * d + smooth * smooth + 1) };
 			})
 			.sort((p, q) => q.score - p.score)
 			.slice(0, maxInfluences);
@@ -652,9 +719,9 @@ function weighted(x: number, y: number, kept: Influence[]): number[] {
 	return out;
 }
 
-function weigh(ws: Workspace, slotBone: string, local: number[], boneNames: string[], maxInfluences: number): number[] {
+function weigh(ws: Workspace, slotBone: string, local: number[], boneNames: string[], maxInfluences: number, smooth: number): number[] {
 	const slotPose = boneByName(load(ws).skeleton, slotBone).appliedPose;
-	const of = influences(ws, boneNames, maxInfluences);
+	const of = influences(ws, boneNames, maxInfluences, smooth);
 	const out: number[] = [];
 	for (let i = 0; i < local.length; i += 2) {
 		const w = slotPose.localToWorld(new Vector2(local[i], local[i + 1]));

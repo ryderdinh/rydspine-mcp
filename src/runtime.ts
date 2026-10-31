@@ -97,6 +97,8 @@ interface MeshRef {
 	mesh: MeshAttachment;
 	/** Signed world-space area of each triangle in the setup pose. */
 	ref: number[];
+	/** Bones that move the mesh: its weights, or the slot's bone. */
+	bones: number[];
 }
 
 interface Distortion {
@@ -127,9 +129,26 @@ function meshRefs(loaded: Loaded): MeshRef[] {
 	const refs: MeshRef[] = [];
 	for (const skin of data.skins)
 		for (const entry of skin.getAttachments())
-			if (entry.attachment instanceof MeshAttachment)
-				refs.push({ slot: entry.slotIndex, name: entry.placeholder, mesh: entry.attachment, ref: triangleAreas(skeleton, entry.slotIndex, entry.attachment) });
+			if (entry.attachment instanceof MeshAttachment) {
+				const mesh = entry.attachment;
+				const bones = new Set<number>();
+				if (mesh.bones) for (let i = 0; i < mesh.bones.length; i += mesh.bones[i] + 1) for (let k = 1; k <= mesh.bones[i]; k++) bones.add(mesh.bones[i + k]);
+				else bones.add(data.slots[entry.slotIndex].boneData.index);
+				refs.push({ slot: entry.slotIndex, name: entry.placeholder, mesh, ref: triangleAreas(skeleton, entry.slotIndex, mesh), bones: [...bones] });
+			}
 	return refs;
+}
+
+/**
+ * True when a bone moving the mesh is mirrored in world space while another is not: the animation turns part of
+ * the mesh over on purpose (a page, a ticket, a card curling over), so folds in it are expected.
+ */
+function mirrored(skeleton: Skeleton, ref: MeshRef): boolean {
+	const signs = ref.bones.map((i) => {
+		const p = skeleton.bones[i].appliedPose;
+		return Math.sign(p.a * p.d - p.b * p.c);
+	});
+	return signs.some((s) => s < 0) && signs.some((s) => s > 0);
 }
 
 /**
@@ -200,6 +219,7 @@ export function validate(ws: Workspace): Report {
 		const frames = Math.max(1, Math.round(animation.duration * FPS));
 		let bad = false;
 		const worst = new Map<MeshRef, Distortion>();
+		const turned = new Set<MeshRef>();
 		play(loaded, name, frames, (frame) => {
 			if (bad) return;
 			for (const b of skeleton.bones) {
@@ -215,6 +235,7 @@ export function validate(ws: Workspace): Report {
 				if (slot.appliedPose.getAttachment() !== ref.mesh) continue;
 				const d = distortion(skeleton, ref, frame / FPS);
 				const prev = worst.get(ref);
+				if (mirrored(skeleton, ref)) turned.add(ref);
 				if (d && (!prev || d.flipped > prev.flipped || d.min < prev.min || d.max > prev.max))
 					worst.set(ref, {
 						flipped: Math.max(d.flipped, prev?.flipped ?? 0),
@@ -226,7 +247,10 @@ export function validate(ws: Workspace): Report {
 		});
 		for (const [ref, d] of worst) {
 			const where = `${name}: mesh ${ref.name} in slot ${skeleton.slots[ref.slot].data.name}`;
-			if (d.flipped) errors.push(`${where} folds over itself (${d.flipped} triangles flipped near ${d.time.toFixed(2)}s); reduce the rotation or add bones/weights there`);
+			if (turned.has(ref)) {
+				if (d.flipped) info.push(`${where} turns over (mirrored bones fold it like a page)`);
+			} else if (d.flipped)
+				errors.push(`${where} folds over itself (${d.flipped} triangles flipped near ${d.time.toFixed(2)}s); reduce the rotation or add bones/weights there`);
 			else if (d.min < SQUASH) warnings.push(`${where} squashes a triangle to ${(d.min * 100).toFixed(0)}% of its area`);
 			else if (d.max > STRETCH) warnings.push(`${where} stretches a triangle to ${d.max.toFixed(1)}x its area`);
 		}

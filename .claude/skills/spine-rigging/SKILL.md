@@ -27,6 +27,11 @@ stretchyman, tank, vine, sack, celestial-circus, diamond, …). Read the art fir
    Give world points (`{x, y}`) read from the art.
 3. Bind slots (`slot_update`, `keepWorld` keeps the art in place); fix draw order (0 = back).
 4. Parts that bend get meshes: `mesh_generate` with `bones` for automatic weights. Rigid parts stay regions.
+   Paper, cloth and ribbons need `smooth` (about the bone spacing) and `maxInfluences` 3–4 so weights blend
+   between bones, or the sheet tears into strips. Running `mesh_generate` again rebuilds a mesh in place.
+   *Page/ticket turn* (Esoteric-style ticket sample): a hull-only mesh (huge `spacing`) over 5–6 sibling bones
+   laid across its length; each bone in turn (2 frames apart) moves to the far end and tweens `scalex` 1 → -1
+   → 1, so the sheet curls over and back. `validate` reports this as "turns over", not a fold error.
 5. Constraints (`constraint_add`), see the recipes below. Game hooks and masks with `shape_add`.
 6. Animate: `anim_create` (say `loop`), then `anim_gait`, `anim_oscillate`, `anim_tween`, `anim_bounce`,
    `anim_set_keys`, `anim_slot_keys`; constraints over time with `anim_constraint_keys`, flipbooks with

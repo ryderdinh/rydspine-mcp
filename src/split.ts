@@ -33,6 +33,8 @@ export interface SplitSpec {
 	overlap?: number;
 	/** Auto mode: blobs smaller than this many pixels join the nearest bigger blob (default 64). */
 	minArea?: number;
+	/** Plain-color background: width in pixels of the anti-aliased rim to unmix from it (default 2, 0 = off). */
+	matte?: number;
 	/** Polygon mode: stray pixels within this distance of a part join it (default 4). */
 	snap?: number;
 	/** Auto mode: names are <prefix>-1, <prefix>-2... (default "part"). */
@@ -57,6 +59,8 @@ export interface Split {
 	background: string;
 	unassigned: number;
 	merged: number;
+	/** Rim pixels made partly transparent to remove the background's halo. */
+	softened: number;
 	overlay: PNG;
 }
 
@@ -96,7 +100,11 @@ function parseColor(s: string): [number, number, number] {
 const hex = (c: number[]) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
 
 /** Marks foreground pixels (1) and names the background it found. */
-export function foreground(png: PNG, background = "auto", tolerance = 24): { mask: Uint8Array; background: string } {
+export function foreground(
+	png: PNG,
+	background = "auto",
+	tolerance = 24,
+): { mask: Uint8Array; background: string; key?: [number, number, number] } {
 	const { width: w, height: h, data } = png;
 	const mask = new Uint8Array(w * h);
 	const border: number[] = [];
@@ -145,7 +153,66 @@ export function foreground(png: PNG, background = "auto", tolerance = 24): { mas
 			queue.push(n);
 		}
 	}
-	return { mask, background: hex(key) };
+	return { mask, background: hex(key), key };
+}
+
+/**
+ * Removes the background's halo from the anti-aliased rim. A rim pixel is read as a blend of the background
+ * and a nearby foreground color F: it gets the blend's alpha and the color F. F is the nearby pixel least like
+ * the background that still explains the rim color within `tolerance`; pixels nothing explains, and pixels of a
+ * flat area that just touches the background, stay as they are.
+ */
+export function matte(png: PNG, mask: Uint8Array, key: [number, number, number], width: number, tolerance: number): { png: PNG; softened: number } {
+	const { width: w, height: h, data } = png;
+	const out = new PNG({ width: w, height: h });
+	data.copy(out.data);
+	if (width <= 0) return { png: out, softened: 0 };
+	// Rim: foreground pixels within `width` steps of the background.
+	const depth = new Uint8Array(w * h);
+	let ring: number[] = [];
+	for (let i = 0; i < w * h; i++) if (!mask[i]) ring.push(i);
+	for (let step = 1; step <= width && ring.length; step++) {
+		const next: number[] = [];
+		for (const i of ring) for (const n of neighbors(i, w, h)) if (mask[n] && !depth[n]) (depth[n] = step), next.push(n);
+		ring = next;
+	}
+	const off = (i: number, c: number) => data[i * 4 + c] - key[c];
+	const far = (i: number) => Math.hypot(off(i, 0), off(i, 1), off(i, 2));
+	const limit = Math.max(12, tolerance);
+	let softened = 0;
+	for (let i = 0; i < w * h; i++) {
+		if (!depth[i]) continue;
+		const x = i % w;
+		const y = (i - x) / w;
+		// A rim blend is a thin ramp: the pixel next to it further in has a different color. One that matches is
+		// part of a flat area of its own color that merely touches the background (skin next to a white page).
+		const same = (j: number) => Math.hypot(data[i * 4] - data[j * 4], data[i * 4 + 1] - data[j * 4 + 1], data[i * 4 + 2] - data[j * 4 + 2]) <= limit / 2;
+		if (neighbors(i, w, h).some((n) => mask[n] && (!depth[n] || depth[n] > depth[i]) && same(n))) continue;
+		const own = far(i);
+		let best = -1;
+		let bestFar = own;
+		let bestAlpha = 1;
+		for (let dy = -width; dy <= width; dy++)
+			for (let dx = -width; dx <= width; dx++) {
+				if (x + dx < 0 || x + dx >= w || y + dy < 0 || y + dy >= h) continue;
+				const j = i + dy * w + dx;
+				if (!mask[j] || data[j * 4 + 3] < 250) continue;
+				const f = far(j);
+				if (f <= bestFar || f < 2 * limit) continue;
+				// Project the rim color onto the line from the background to F; the distance off that line is the error.
+				const a = Math.min(1, Math.max(0, (off(i, 0) * off(j, 0) + off(i, 1) * off(j, 1) + off(i, 2) * off(j, 2)) / (f * f)));
+				const miss = Math.hypot(off(i, 0) - a * off(j, 0), off(i, 1) - a * off(j, 1), off(i, 2) - a * off(j, 2));
+				if (miss > limit) continue;
+				best = j;
+				bestFar = f;
+				bestAlpha = a;
+			}
+		if (best < 0 || bestAlpha > 0.98) continue;
+		for (let c = 0; c < 3; c++) out.data[i * 4 + c] = data[best * 4 + c];
+		out.data[i * 4 + 3] = Math.round(data[i * 4 + 3] * bestAlpha);
+		softened++;
+	}
+	return { png: out, softened };
 }
 
 function insidePolygon(poly: [number, number][], x: number, y: number): boolean {
@@ -300,9 +367,11 @@ function cut(png: PNG, owner: Int32Array, id: number, overlap: number, polygon?:
 	return { png: out, left: x0, top: y0, pixels, filled };
 }
 
-export function splitImage(png: PNG, spec: Omit<SplitSpec, "image" | "origin">): Split {
-	const { width: w, height: h } = png;
-	const { mask, background } = foreground(png, spec.background, spec.tolerance ?? 24);
+export function splitImage(source: PNG, spec: Omit<SplitSpec, "image" | "origin">): Split {
+	const { width: w, height: h } = source;
+	const tolerance = spec.tolerance ?? 24;
+	const { mask, background, key } = foreground(source, spec.background, tolerance);
+	const { png, softened } = key ? matte(source, mask, key, Math.round(spec.matte ?? 2), tolerance) : { png: source, softened: 0 };
 	let owner: Int32Array;
 	let names: string[];
 	let unassigned = 0;
@@ -325,7 +394,7 @@ export function splitImage(png: PNG, spec: Omit<SplitSpec, "image" | "origin">):
 		const c = cut(png, owner, id, Math.max(0, Math.round(overlap)), spec.parts?.[id].polygon);
 		pieces.push({ name, ...c, color: PALETTE[id % PALETTE.length][0] });
 	});
-	return { pieces, width: w, height: h, background, unassigned, merged, overlay: overlay(png, owner, spec.parts) };
+	return { pieces, width: w, height: h, background, unassigned, merged, softened, overlay: overlay(png, owner, spec.parts) };
 }
 
 /** The picture dimmed, each part tinted in its palette color, outlines drawn, unassigned pixels magenta. */

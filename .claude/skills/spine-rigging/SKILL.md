@@ -20,7 +20,9 @@ stretchyman, tank, vine, sack, celestial-circus, diamond, …). Read the art fir
    A flat picture (no layers): `image_inspect` (grid in image pixels, y down), then `image_split` with one
    polygon per part, back to front, and `dryRun: true` until the overlay has no magenta. Trace a part tightly
    where it lies over another; outline the hidden piece too (neck under the head, thighs under the shirt) and
-   give the part behind `overlap` (~40 px on a 1200 px character) so turning joints show no gap.
+   give the part behind `overlap` (~40 px on a 1200 px character) so turning joints show no gap. On a white or
+   plain-color page the anti-aliased rim is unmixed from the background (`matte`, default 2 px), so the parts
+   show no light halo over other backdrops; raise it for soft or blurry edges.
 2. Bones: prefer `rig_template` (chain, hinge, wheel, limb, biped, quadruped) over `bone_add` one by one.
    Give world points (`{x, y}`) read from the art.
 3. Bind slots (`slot_update`, `keepWorld` keeps the art in place); fix draw order (0 = back).

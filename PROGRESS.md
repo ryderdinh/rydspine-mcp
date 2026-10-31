@@ -234,10 +234,15 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
   - `image_split`: không có `parts` thì mỗi mảng rời trên nền là một bộ phận (mảng nhỏ hơn `minArea` gộp vào mảng gần nhất); có `parts` thì cắt theo polygon, liệt kê từ sau ra trước, chỗ chồng nhau thuộc bộ phận phía trước, pixel lẻ trong `snap` px gộp vào bộ phận gần nhất. Nền: `auto` (trong suốt nếu viền trong suốt, không thì màu phổ biến nhất ở viền, loang từ viền nên vùng trắng nằm kín bên trong vẫn giữ), `transparent` hoặc mã màu. `overlap` vẽ bù phần bị bộ phận phía trước che bằng cách loang màu mép vào, chỉ trong polygon của bộ phận. Trả overlay tô màu từng bộ phận (pixel chưa thuộc ai màu magenta); `dryRun` chỉ trả overlay. Nhập như `psd_import` (gốc toạ độ mặc định giữa đáy).
   - Test `test/split.test.ts` (5 ca). Tổng 55/55 test qua.
 - Thử thật trên nhân vật Codex vẽ (1254x1254, nền trắng, không commit): 6 bộ phận (2 tay, 2 chân, thân, đầu) sau 2 lần chỉnh polygon, rig 7 xương, animation vẫy tay. Validate OK, Spine 4.3.26 nhập được. Bài học (đã ghi vào skill): phải khoanh cả phần bị che (cổ dưới đầu, đầu đùi dưới áo), nếu không khớp hở trắng khi xoay.
-- Hạn chế: vẽ bù chỉ loang màu (không vẽ lại chi tiết); viền khử răng cưa với nền màu giữ quầng nhạt; dưới nách còn vệt nhỏ khi polygon của tay rộng hơn dáng tay.
+- Hạn chế: vẽ bù chỉ loang màu (không vẽ lại chi tiết); (đã sửa ở tiếp 13) viền khử răng cưa với nền màu giữ quầng nhạt; dưới nách còn vệt nhỏ khi polygon của tay rộng hơn dáng tay.
+
+### 2026-10-31 (tiếp 13)
+
+- `image_split` khử quầng viền khi ảnh có nền một màu (`matte`, mặc định 2 px, 0 = tắt): mỗi pixel ở dải mép được đọc như màu nền pha với một màu nét gần đó (pixel khác nền nhất mà vẫn giải thích được màu mép), rồi nhận độ trong suốt của phép pha và màu nét thật. Pixel không giải thích được, hoặc thuộc một mảng màu phẳng chạm nền (da sát nền trắng), giữ nguyên. Kết quả báo số pixel đã xử lý.
+- Thử trên ảnh cậu bé (nền trắng): 7981 pixel viền được tách; ghép lên nền tối thì hết viền răng cưa trắng quanh nét đen ở tóc và bàn tay, màu bên trong giữ nguyên.
+- Test mới cho viền pha 50%, mảng da chạm nền và `matte: 0`. 56/56 test qua.
 
 ## Việc tiếp theo
 
-1. Chuyển repo sang public, bật GitHub Pages (`docs/`), thử bộ cài thật trên một máy Mac và một máy Windows khác.
 2. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
-3. Tách ảnh phẳng: đã có bản đầu. Có thể làm tiếp: AI gợi ý polygon tự động, vẽ bù tốt hơn (inpaint bằng model ảnh), làm mờ quầng viền với nền màu.
+3. Tách ảnh phẳng: đã có bản đầu và đã khử quầng viền. Có thể làm tiếp: AI gợi ý polygon tự động, vẽ bù tốt hơn (inpaint bằng model ảnh).

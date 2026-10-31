@@ -80,6 +80,26 @@ describe("image split", () => {
 		expect(splitImage(png, { parts: [{ name: "a", polygon: [[12, 12], [38, 12], [38, 38], [12, 38]] }] }).unassigned).toBe(0);
 	});
 
+	it("unmixes a plain background from the anti-aliased rim and leaves unrelated edge colors alone", () => {
+		// A red square with a half-blended column on its left and a flat skin-colored band on its right.
+		const png = picture(40, 30, WHITE, [
+			[10, 10, 30, 20, RED],
+			[9, 10, 10, 20, [238, 143, 143, 255]],
+			[30, 10, 33, 20, [240, 200, 180, 255]],
+		]);
+		const s = splitImage(png, {});
+		const [part] = s.pieces;
+		expect(s.softened).toBe(10);
+		expect([part.left, part.png.width]).toEqual([9, 24]);
+		const rim = pixel(part.png, 0, 5);
+		expect(rim.slice(0, 3)).toEqual(RED.slice(0, 3));
+		expect(Math.abs(rim[3] - 128)).toBeLessThanOrEqual(3);
+		expect(pixel(part.png, 23, 5)).toEqual([240, 200, 180, 255]);
+		expect(pixel(part.png, 5, 5)).toEqual(RED);
+		expect(splitImage(png, { matte: 0 }).softened).toBe(0);
+		expect(pixel(splitImage(png, { matte: 0 }).pieces[0].png, 0, 5)).toEqual([238, 143, 143, 255]);
+	});
+
 	it("imports the parts through the tools at their place in the picture", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "split-"));
 		mkdirSync(dir, { recursive: true });

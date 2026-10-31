@@ -265,7 +265,8 @@ export function createServer(): McpServer {
 				"and stray pixels near an outline join it. overlap=N paints in up to N pixels of what the parts in front hide " +
 				"(smearing the part's own edge colors, only inside its outline: outline the whole part, hidden piece included), " +
 					"so joints do not open gaps when parts turn; use about the joint's " +
-				"thickness/4 on parts behind a joint. Returns an overlay (each part tinted, unassigned pixels magenta); " +
+				"thickness/4 on parts behind a joint. On a plain-color background the anti-aliased rim is unmixed from it " +
+				"(matte, default 2 px) so no halo of the background shows on other backdrops. Returns an overlay (each part tinted, unassigned pixels magenta); " +
 				"dryRun=true only returns it.",
 			inputSchema: {
 				project,
@@ -282,6 +283,7 @@ export function createServer(): McpServer {
 					.describe("Parts back to front; omit to split into separate blobs"),
 				background,
 				tolerance,
+				matte: z.number().int().min(0).max(8).optional().describe("Plain-color background: rim width unmixed from it (default 2, 0 = off)"),
 				overlap: z.number().min(0).max(256).optional().describe("Default overlap for every part (default 0)"),
 				minArea: z.number().int().min(1).optional().describe("Blob mode: smaller blobs join the nearest part (default 64)"),
 				snap: z.number().int().min(0).max(64).optional().describe("Outline mode: stray pixels this close join a part (default 4)"),
@@ -304,6 +306,7 @@ export function createServer(): McpServer {
 					),
 				];
 				if (s.merged) lines.push(`${s.merged} small blob(s) joined the nearest part`);
+				if (s.softened) lines.push(`${s.softened} rim pixels unmixed from the background`);
 				if (s.unassigned) lines.push(`${s.unassigned} foreground pixels belong to no part (magenta); widen the outlines or raise snap`);
 				if (dryRun) lines.push("dry run: nothing imported");
 				else {

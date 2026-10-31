@@ -501,6 +501,14 @@ export function describe(ws: Workspace): string {
 		const tracks = Object.entries(a.bones ?? {}).flatMap(([b, tl]) => Object.keys(tl).map((t) => `${b}.${t}`));
 		lines.push(`  ${name}${ws.meta.loops[name] ? " (loop)" : ""}: ${tracks.join(", ") || "empty"}`);
 	}
+	const named = ws.doc.skins.filter((s) => s.name !== "default");
+	if (named.length) {
+		lines.push("skins:");
+		for (const s of named) {
+			const swaps = Object.entries(s.attachments).flatMap(([slot, atts]) => Object.keys(atts).map((a) => `${slot}/${a}`));
+			lines.push(`  ${s.name}: ${swaps.join(", ") || "no changes yet"}`);
+		}
+	}
 	lines.push(`images: ${ws.imageNames().join(", ") || "none"}`);
 	return lines.join("\n");
 }

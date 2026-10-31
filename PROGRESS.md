@@ -252,9 +252,14 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
   - `validate` không còn coi là lỗi khi mesh gập lúc có xương lật gương (lật trang có chủ ý): ghi "turns over" vào info. Gập do xoay quá tay vẫn là lỗi.
 - Test mới `test/mesh.test.ts` (dựng lại giữ chỗ, smooth trải trọng số, lật trang qua validate). 57/57 test qua.
 
+### 2026-10-31 (tiếp 15)
+
+- Tool mới `anim_deform_keys`: key deform cho mesh (thường hoặc có trọng số). Mỗi key là danh sách phép biến đổi trong toạ độ thế giới, áp lần lượt lên hình setup: `scaleX` theo trục `angle` và `scaleY` vuông góc, `rotate`, rồi dời `x`/`y` quanh `pivot` (mặc định tâm mesh); `radius` giới hạn phép biến đổi vào các đỉnh gần pivot, mờ dần theo cosine (dùng làm tay nắm kéo một chỗ). Tool đổi độ dời thế giới thành offset Spine: với mesh có trọng số, mỗi xương ảnh hưởng nhận cùng độ dời đổi về không gian của nó, nên tổng có trọng số đúng bằng độ dời. Offset 0 ở đầu/cuối được cắt (`offset`); `ease` thành curve 0..1 của deform.
+- `property: "scale"` trong `anim_set_keys`/`anim_tween`/`anim_oscillate`/`anim_bounce` key cả `scalex` và `scaley` cùng lúc.
+- Áp lên `ticket-flip`: vệt sáng thành mesh, 5 key deform chuyển từ key của mẫu (mỗi đỉnh mẫu thành một tay nắm `radius` 300). Spine import và render: vệt vàng quét thành dải dài ngang vé như mẫu.
+- Test mới `test/deform.test.ts` (kéo dãn mesh thường và có trọng số trên xương xoay/scale, khớp từng đỉnh; ease; radius; mesh có deform không dựng lại được; `scale` hai trục). 59/59 test qua.
+
 ## Việc tiếp theo
 
-1. Tool key deform cho mesh (vệt sáng kéo dài như mẫu vé) và cho phép key `scale` cả hai trục một lệnh.
-
-2. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
+1. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
 3. Tách ảnh phẳng: đã có bản đầu và đã khử quầng viền. Có thể làm tiếp: AI gợi ý polygon tự động, vẽ bù tốt hơn (inpaint bằng model ảnh).

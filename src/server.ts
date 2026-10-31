@@ -26,6 +26,7 @@ import {
 	writeSlotKeys,
 } from "./motion.js";
 import { diffVersions } from "./diff.js";
+import { writeDeformKeys } from "./deform.js";
 import { mirrorAnimation, mirrorBones } from "./mirror.js";
 import { importProject, syncProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
@@ -1091,6 +1092,48 @@ export function createServer(): McpServer {
 			edit(a.project, `sequence keys ${a.animation} ${a.slot}`, (ws) =>
 				writeSequenceKeys(ws, a.animation, a.slot, a.attachment, a.keys, a.skin),
 			),
+	);
+
+	server.registerTool(
+		"anim_deform_keys",
+		{
+			description:
+				"Reshape a mesh over time (deform keys): stretch a glow into a streak, bulge a flag, squash a blob, bend a tip. " +
+				"Each key lists moves in world space applied in order to the setup shape (no moves = setup shape): scaleX " +
+				"along `angle` and scaleY across it, rotate, then x/y, around `pivot` (default: the mesh's center). `radius` " +
+				"limits a move to vertices near the pivot, fading out smoothly. Make the mesh first (mesh_generate); a " +
+				"mesh with deform keys cannot be rebuilt. Replaces keys between the first and last given time.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				slot: z.string(),
+				attachment: z.string().optional().describe("Default: the slot's setup attachment"),
+				skin: z.string().optional(),
+				keys: z
+					.array(
+						z.object({
+							time: z.number().min(0),
+							moves: z
+								.array(
+									z.object({
+										pivot: z.object({ x: z.number(), y: z.number() }).optional(),
+										scaleX: z.number().optional(),
+										scaleY: z.number().optional(),
+										angle: z.number().optional().describe("Direction of scaleX, degrees (default 0)"),
+										rotate: z.number().optional(),
+										x: z.number().optional(),
+										y: z.number().optional(),
+										radius: z.number().positive().optional(),
+									}),
+								)
+								.optional(),
+							ease: ease,
+						}),
+					)
+					.min(1),
+			},
+		},
+		(a) => edit(a.project, `deform keys ${a.animation} ${a.slot}`, (ws) => writeDeformKeys(ws, a)),
 	);
 
 	server.registerTool(

@@ -35,7 +35,11 @@ stretchyman, tank, vine, sack, celestial-circus, diamond, …). Read the art fir
 5. Constraints (`constraint_add`), see the recipes below. Game hooks and masks with `shape_add`.
 6. Animate: `anim_create` (say `loop`), then `anim_gait`, `anim_oscillate`, `anim_tween`, `anim_bounce`,
    `anim_set_keys`, `anim_slot_keys`; constraints over time with `anim_constraint_keys`, flipbooks with
-   `anim_sequence_keys`, game cues with `anim_event_keys`, layer swaps with `anim_draw_order_keys`.
+   `anim_sequence_keys`, game cues with `anim_event_keys`, layer swaps with `anim_draw_order_keys`,
+   mesh shapes with `anim_deform_keys`. `property: "scale"` keys scalex and scaley together.
+   *Deform* (the ticket sample's glow: a 6-vertex additive mesh, 5 deform keys while it sweeps): give each key
+   world-space moves; stretch with `scaleX` along `angle` from a `pivot` at the tail, or drag spots with small
+   moves that have a `radius`. Deform is for shapes bones cannot make; a mesh with deform keys cannot be rebuilt.
 7. Check after every step that matters: `validate`, `motion_check`, `preview` (look at the frames).
    `project_status` shows the rig as text. Lock approved parts with `lock_set`; undo with `history_revert`.
 8. `export` when done. With Spine available, `npm run spine:check` round-trips through the real editor.

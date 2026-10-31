@@ -28,7 +28,7 @@ Dự án được lưu trong `workspaces/` (đổi bằng biến `RYDSPINE_WORKS
 ## Quy trình
 
 1. `project_create`: tạo dự án; hoặc `project_import` để mở project Spine 4.3 có sẵn (JSON hoặc `.skel`).
-2. `psd_import` hoặc `image_import`: đưa các bộ phận vào, mỗi phần nằm đúng vị trí của nó.
+2. `psd_import` hoặc `image_import`: đưa các bộ phận vào, mỗi phần nằm đúng vị trí của nó. Trong PSD, layer `<tên>[pivot]` (một chấm nhỏ, ẩn cũng được) đặt xương cho layer hoặc nhóm `<tên>` nằm cạnh nó; `[pivot]` nằm trong một nhóm là xương của nhóm đó. Xương lồng nhau theo nhóm, và mỗi bộ phận gắn vào xương gần nhất.
 3. `rig_template` (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân) hoặc `bone_add` (`space: "world"`): đặt xương tại các khớp trên hình.
 4. `slot_update`: gắn bộ phận vào xương; hình giữ nguyên vị trí.
 5. `mesh_generate` (mặc định bám theo viền ảnh), `constraint_add`: thêm phần uốn cong, IK, transform, physics, path (đưa các điểm trên hình, rydspine tự tạo đường cong; `pathBones` gắn đường cong vào vài xương điều khiển) và slider (phát animation theo một xương điều khiển). `shape_add`: điểm mốc cho game (`point`: nòng súng, tay cầm), vùng va chạm (`boundingbox`) hoặc mặt nạ (`clipping`), từ các điểm trên hình hoặc tự dò theo viền của một slot (`around`).
@@ -43,9 +43,9 @@ Chạy `npm run ui` (hoặc gọi tool `ui_open`) rồi mở http://127.0.0.1:51
 
 ## Bộ nghiệm thu
 
-Chạy `npm run acceptance` để dựng 7 asset mẫu (nhân vật, rồng, cây, rương, xe, logo, đèn lồng) qua tool MCP. Kết quả nằm trong `acceptance/out/`: file xuất cho từng asset, `report.json` và trang `studio-local.html`.
+Chạy `npm run acceptance` để dựng 8 asset mẫu (nhân vật, rồng, cây, rương, xe, logo, đèn lồng, cua) qua tool MCP. Kết quả nằm trong `acceptance/out/`: file xuất cho từng asset, `report.json` và trang `studio-local.html`.
 
-Chạy `npm run spine:check` để kiểm 7 asset bằng Spine Editor thật: Spine import từng file JSON, xuất lại, rồi runtime so hai bản từng khung; Spine cũng vẽ dải khung hình cho mỗi animation. Cần đặt `SPINE_CLI` trỏ tới Spine (ví dụ `/Applications/Spine.app/Contents/MacOS/Spine`), hoặc trên Linux đặt `SPINE_ACTIVATION_CODE` để script tự tải Spine. Thiếu cả hai thì bỏ qua.
+Chạy `npm run spine:check` để kiểm 8 asset bằng Spine Editor thật: Spine import từng file JSON, xuất lại, rồi runtime so hai bản từng khung; Spine cũng vẽ dải khung hình cho mỗi animation. Cần đặt `SPINE_CLI` trỏ tới Spine (ví dụ `/Applications/Spine.app/Contents/MacOS/Spine`), hoặc trên Linux đặt `SPINE_ACTIVATION_CODE` để script tự tải Spine. Thiếu cả hai thì bỏ qua.
 
 Chạy `npm run skel:examples` để kiểm phần đọc `.skel` trên bộ ví dụ chính thức của Spine (tải thưa từ `github.com/EsotericSoftware/spine-runtimes`, nhánh 4.3): mỗi file được chuyển sang JSON rồi so với runtime đọc thẳng `.skel`, từng khung. `npx tsx acceptance/skel-fixture.ts` tạo lại `test/fixtures/features` bằng Spine thật.
 

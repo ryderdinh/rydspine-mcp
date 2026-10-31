@@ -173,7 +173,10 @@ export function createServer(): McpServer {
 		{
 			description:
 				"Import every visible pixel layer of a PSD as a part (image + slot), keeping position, layer order, " +
-				"opacity and blend mode. World origin defaults to the bottom-center of the canvas (where feet stand).",
+				"opacity and blend mode. World origin defaults to the bottom-center of the canvas (where feet stand). " +
+				'Pivot markers: a layer "<name>[pivot]" (a small dot; may be hidden) is not imported but adds a bone ' +
+				"at its center for the layer or group <name> beside it; a bare \"[pivot]\" inside a group pivots the group. " +
+				"Bones nest like the groups (a part's bone is a child of its group's bone), and parts attach to the nearest bone.",
 			inputSchema: {
 				project,
 				psd: z.string().describe("Path to the .psd file"),
@@ -188,8 +191,16 @@ export function createServer(): McpServer {
 				return [
 					`canvas ${r.canvas}; ${r.parts.length} parts (back to front):`,
 					...r.parts.map(
-						(p) => `  ${p.slot}: ${p.width}x${p.height} at (${p.x}, ${p.y})${p.note ? ` - ${p.note}` : ""}`,
+						(p) =>
+							`  ${p.slot}: ${p.width}x${p.height} at (${p.x}, ${p.y})` +
+							`${p.bone === "root" ? "" : ` on bone ${p.bone}`}${p.note ? ` - ${p.note}` : ""}`,
 					),
+					...(r.bones.length
+						? [
+								"bones from pivot markers (world position):",
+								...r.bones.map((b) => `  ${b.bone} (parent ${b.parent}) at (${b.x}, ${b.y})`),
+							]
+						: []),
 					...(r.skipped.length ? ["skipped:", ...r.skipped.map((s) => `  ${s}`)] : []),
 				].join("\n");
 			}),

@@ -30,4 +30,4 @@ Danh mục để tìm thêm: [glama.ai](https://glama.ai/mcp/servers?query=spine
   và chuỗi ảnh (họ chưa có).
 - Đã làm: key `event` và `drawOrder`, curve bezier chuẩn hoá kiểu CSS cho mọi `ease`, attachment `point` / `boundingbox` (theo UmutFarukDilli); path gắn vào vài xương điều khiển như ví dụ vine/stretchyman.
 - Đã làm: `mirror_animation` / `mirror_bones`.
-- Nên làm: pivot theo layer đánh dấu `[pivot]` trong `psd_import`.
+- Đã làm: pivot theo layer đánh dấu `[pivot]` trong `psd_import` (thêm: `[pivot]` trong nhóm cho xương của nhóm, cây xương theo nhóm).

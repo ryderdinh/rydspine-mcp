@@ -5,6 +5,7 @@ import { TextureAtlas } from "@esotericsoftware/spine-core";
 import { PNG } from "pngjs";
 import { readPng } from "./atlas.js";
 import { load } from "./runtime.js";
+import { skelToJson } from "./skel.js";
 import { SPINE_VERSION, type SkeletonDoc } from "./types.js";
 import { UserError, Workspace } from "./workspace.js";
 
@@ -21,13 +22,18 @@ export interface ImportSpec {
 /** Reads and normalizes an exported Spine 4.3 skeleton JSON. */
 function readSkeleton(path: string, notes: string[]): SkeletonDoc {
 	if (!existsSync(path)) throw new UserError(`skeleton file not found: ${path}`);
-	if (!path.toLowerCase().endsWith(".json"))
-		throw new UserError("only skeleton JSON is supported; export JSON (not binary .skel) from Spine");
 	let doc: SkeletonDoc;
-	try {
-		doc = JSON.parse(readFileSync(path, "utf8"));
-	} catch (e) {
-		throw new UserError(`not valid JSON: ${(e as Error).message}`);
+	if (path.toLowerCase().endsWith(".skel")) {
+		doc = skelToJson(readFileSync(path));
+		notes.push("converted from binary .skel to JSON");
+	} else if (!path.toLowerCase().endsWith(".json")) {
+		throw new UserError("give the skeleton as .json or binary .skel, as exported from Spine");
+	} else {
+		try {
+			doc = JSON.parse(readFileSync(path, "utf8"));
+		} catch (e) {
+			throw new UserError(`not valid JSON: ${(e as Error).message}`);
+		}
 	}
 	const legacy = LEGACY_CONSTRAINT_KEYS.filter((k) => Array.isArray(doc[k]));
 	if (legacy.length)

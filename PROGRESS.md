@@ -175,7 +175,7 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Mọi `ease` (key xương, slot, constraint, tween) nhận thêm bezier kiểu CSS `[x1, y1, x2, y2]`; x phải trong 0..1, y được vượt để tạo nảy.
 - `project_status` liệt kê event và key thứ tự vẽ. `spine:check` so thêm các event mỗi animation bắn ra (thời điểm, giá trị).
 - Asset `chest`: nắp bật bằng bezier tự đưa, quầng sáng vẽ đè lên nắp khi mở, event `creak` (audio) và `sparkle`.
-- Test: 41 test đạt.
+- Test: 41 test đạt. `spine:check` 7/7: event của chest (3) và bước chân của hero (2 và 4) khớp sau khi qua Spine, thứ tự vẽ khớp mọi frame, lệch ≤ 0,0011.
 
 ## Việc tiếp theo
 

@@ -243,6 +243,55 @@ export function addPart(ws: Workspace, part: Part): { slot: string; width: numbe
 	return { slot: name, width, height };
 }
 
+export interface SequenceSpec {
+	/** Attachment name; also the slot name when a new slot is made. */
+	name: string;
+	/** PNG frames, in playing order. */
+	images: string[];
+	/** Existing slot to add the attachment to (default: a new slot named after it, on top). */
+	slot?: string;
+	x?: number;
+	y?: number;
+	bone?: string;
+	/** Frame shown in the setup pose (0-based). */
+	setup?: number;
+}
+
+/**
+ * Imports frames as an image sequence region: images <name>/<name>01, <name>/<name>02, ... (Spine's numbered
+ * path convention), sized by the first frame and centered at world (x, y).
+ */
+export function importSequence(ws: Workspace, spec: SequenceSpec): { slot: string; frames: number; width: number; height: number; warnings: string[] } {
+	checkName("attachment", spec.name);
+	const count = spec.images.length;
+	if (count < 2) throw new UserError("a sequence needs at least 2 frames");
+	const setup = spec.setup ?? 0;
+	if (setup < 0 || setup >= count) throw new UserError(`setup frame ${setup} is outside the ${count} frames`);
+	const digits = Math.max(2, String(count).length);
+	const base = `${spec.name}/${spec.name}`;
+	const slotName = spec.slot ?? spec.name;
+	if (spec.slot) assertUnlocked(ws, "slots", [spec.slot]);
+	const existing = spec.slot ? findSlot(ws, spec.slot) : undefined;
+	if (!existing && ws.doc.slots.some((s) => s.name === slotName)) throw new UserError(`slot "${slotName}" already exists`);
+	if (defaultSkin(ws).attachments[slotName]?.[spec.name]) throw new UserError(`attachment "${spec.name}" already exists in slot "${slotName}"`);
+	const sizes = spec.images.map((path) => imageSize(path));
+	const { width, height } = sizes[0];
+	const warnings = sizes.some((s) => s.width !== width || s.height !== height)
+		? [`frames differ in size; all are shown at ${width}x${height} (the first frame's size)`]
+		: [];
+	spec.images.forEach((path, i) => ws.addImage(path, `${base}${String(i + 1).padStart(digits, "0")}`));
+	const bone = existing?.bone ?? spec.bone ?? "root";
+	const parentPose = boneByName(load(ws).skeleton, bone).appliedPose;
+	const local = toLocal(parentPose, spec.x ?? 0, spec.y ?? 0, 0);
+	const region: RegionJson = { path: base, width, height, sequence: { count, start: 1, digits, ...(setup ? { setup } : {}) } };
+	if (local.x) region.x = local.x;
+	if (local.y) region.y = local.y;
+	if (local.rotation) region.rotation = local.rotation;
+	if (!existing) ws.doc.slots.push({ name: slotName, bone, attachment: spec.name });
+	(defaultSkin(ws).attachments[slotName] ??= {})[spec.name] = region;
+	return { slot: slotName, frames: count, width, height, warnings };
+}
+
 export interface SlotUpdate {
 	name: string;
 	bone?: string;
@@ -550,6 +599,13 @@ export function removeConstraint(ws: Workspace, name: string): void {
 	const before = ws.doc.constraints.length;
 	ws.doc.constraints = ws.doc.constraints.filter((c) => c.name !== name);
 	if (ws.doc.constraints.length === before) throw new UserError(`constraint "${name}" not found`);
+	for (const a of Object.values(ws.doc.animations))
+		for (const type of ["ik", "transform", "path", "physics", "slider"]) {
+			const group = a[type] as Record<string, unknown> | undefined;
+			if (!group || !(name in group)) continue;
+			delete group[name];
+			if (!Object.keys(group).length) delete a[type];
+		}
 }
 
 /** Compact text view of the rig for the model to read. */

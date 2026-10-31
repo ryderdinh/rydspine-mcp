@@ -1,4 +1,4 @@
-// Acceptance suite: builds the six reference assets from REQUIREMENTS.md §5 entirely through the MCP
+// Acceptance suite: builds the six reference assets from REQUIREMENTS.md §5 (plus a lantern for constraint and sequence timelines) entirely through the MCP
 // tools, then validates, previews and exports each one.
 // Usage: npx tsx acceptance/build.ts [outDir]   (default acceptance/out)
 import { cpSync, mkdirSync, writeFileSync } from "node:fs";
@@ -333,7 +333,101 @@ async function logo(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	return r;
 }
 
-export const ASSETS = { hero, dragon, tree, chest, car, logo };
+/** Constraint and image sequence timelines: a flipbook flame, keyed physics wind, a slider, a path and mix keys. */
+async function lantern(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
+	const project = "lantern";
+	const r: AssetReport = {
+		project,
+		title: "Đèn lồng",
+		prompt: "Đèn lồng đung đưa trong gió, lửa bập bùng, tua rua bay, đốm sáng chạy quanh.",
+		animations: ["sway"],
+		checks: [],
+	};
+	await ok("project_create", { name: project });
+	await ok("image_import", {
+		project,
+		images: [
+			{ path: paint.ellipse("glow", 120, 120, [255, 210, 120], { outline: 0, shade: 0 }), x: 0, y: 100 },
+			{ path: paint.rect("cap", 50, 14, [120, 40, 30], 4), x: 0, y: 150 },
+			{ path: paint.ellipse("body", 70, 90, [220, 60, 40], { shade: 0.3 }), x: 0, y: 100 },
+			part(paint, "tassel", strip([0, 54], [0, 10], 10, 4), [240, 190, 60]),
+			...["a", "b", "c"].map((n, i) => ({ path: paint.star(`spark-${n}`, 14, 4, 0.35, [255, 150, 30], { outline: 0, shade: 0 }), name: `spark-${n}`, x: -60 + 40 * i, y: 100 })),
+		],
+	});
+	// Four flame frames, each a little taller or leaner.
+	const flames = [[18, 30], [16, 36], [20, 28], [15, 34]].map(([w, h], i) => paint.ellipse(`flame-${i}`, w, h, [255, 240, 140], { outline: 0, shade: 0.2 }));
+	await ok("bone_add", {
+		project,
+		bones: [
+			{ name: "lantern", x: 0, y: 160, space: "world", length: 60, rotation: -90 },
+			{ name: "flame", parent: "lantern", x: 0, y: 100, space: "world" },
+			{ name: "glow", parent: "root", x: 0, y: 100, space: "world" },
+			{ name: "tassel", parent: "lantern", x: 0, y: 54, space: "world", length: 44, rotation: -90 },
+			{ name: "brightness", parent: "root", x: 120, y: 20, space: "world" },
+		],
+	});
+	await ok("sequence_import", { project, name: "fire", images: flames, x: 0, y: 100, bone: "flame" });
+	await ok("slot_update", { project, name: "fire", drawOrder: 3 });
+	for (const slot of ["cap", "body"]) await ok("slot_update", { project, name: slot, bone: "lantern" });
+	await ok("slot_update", { project, name: "tassel", bone: "tassel" });
+	await ok("slot_update", { project, name: "glow", bone: "glow" });
+	await ok("rig_template", { project, template: { kind: "chain", name: "spark", points: [{ x: -60, y: 100 }, { x: 60, y: 100 }], segments: 3 } });
+	// Each spark sits on its bone's origin, so it rides the path exactly.
+	for (const [i, n] of ["a", "b", "c"].entries()) await ok("slot_update", { project, name: `spark-${n}`, bone: `spark${i + 1}` });
+	// The glow trails the flame (holder pattern from the examples, with a partial mix).
+	await ok("constraint_add", {
+		project,
+		constraint: { type: "transform", name: "glow-follow", bones: ["glow"], source: "flame", properties: { x: { to: { x: {} } }, y: { to: { y: {} } } }, mixX: 0.6, mixY: 0.6 },
+	});
+	await ok("constraint_add", { project, constraint: { type: "physics", name: "tassel-sway", bone: "tassel", rotate: 1, inertia: 0.4, strength: 120, damping: 0.85, mass: 2.8 } });
+	await ok("constraint_add", {
+		project,
+		constraint: {
+			type: "path",
+			name: "orbit",
+			bones: ["spark1", "spark2", "spark3"],
+			points: [{ x: 0, y: 175 }, { x: 70, y: 100 }, { x: 0, y: 25 }, { x: -70, y: 100 }],
+			closed: true,
+			pathBone: "lantern",
+			spacingMode: "percent",
+			spacing: 0.33,
+		},
+	});
+	await ok("anim_create", { project, name: "flicker", loop: false });
+	await ok("anim_slot_keys", { project, animation: "flicker", slot: "glow", property: "alpha", keys: [{ time: 0, value: 0.3 }, { time: 1, value: 1 }] });
+	await ok("constraint_add", { project, constraint: { type: "slider", name: "light", animation: "flicker", time: 0.8 } });
+
+	const a = "sway";
+	await ok("anim_create", { project, name: a, loop: true });
+	await ok("anim_oscillate", { project, animation: a, bones: ["lantern"], property: "rotate", amplitude: 8, period: 2, end: 2 });
+	await ok("anim_sequence_keys", { project, animation: a, slot: "fire", keys: [{ time: 0, mode: "loop", delay: 1 / 12 }] });
+	await ok("anim_constraint_keys", {
+		project,
+		animation: a,
+		constraint: "tassel-sway",
+		property: "wind",
+		keys: [{ time: 0, value: 0, ease: "ease-in-out" }, { time: 1, value: 40, ease: "ease-in-out" }, { time: 2, value: 0 }],
+	});
+	await ok("anim_constraint_keys", { project, animation: a, constraint: "orbit", property: "position", keys: [{ time: 0, value: 0 }, { time: 2, value: 1 }] });
+	await ok("anim_constraint_keys", {
+		project,
+		animation: a,
+		constraint: "glow-follow",
+		property: "mix",
+		keys: [{ time: 0, mixX: 0.6, mixY: 0.6, ease: "ease-in-out" }, { time: 1, mixX: 1, mixY: 0.9, ease: "ease-in-out" }, { time: 2, mixX: 0.6, mixY: 0.6 }],
+	});
+	await ok("anim_constraint_keys", {
+		project,
+		animation: a,
+		constraint: "light",
+		property: "time",
+		keys: [{ time: 0, value: 0.8, ease: "ease-in-out" }, { time: 0.5, value: 0.4, ease: "ease-in-out" }, { time: 1.2, value: 1, ease: "ease-in-out" }, { time: 2, value: 0.8 }],
+	});
+	await validated(ok, call, project, r);
+	return r;
+}
+
+export const ASSETS = { hero, dragon, tree, chest, car, logo, lantern };
 
 export async function buildAll(outDir: string): Promise<AssetReport[]> {
 	const { root, ok, call } = await connect();
@@ -355,7 +449,7 @@ export async function buildAll(outDir: string): Promise<AssetReport[]> {
 	writeFileSync(join(outDir, "report.json"), `${JSON.stringify(reports, null, 2)}\n`);
 	// The studio page for these assets; studio.html is the fragment for publishing, studio-local.html opens directly.
 	const extras = Object.fromEntries(reports.map((r) => [r.project, r]));
-	const subtitle = "Six acceptance assets, rigged and animated through the rydspine MCP tools";
+	const subtitle = "Seven acceptance assets, rigged and animated through the rydspine MCP tools";
 	writeFileSync(join(outDir, "studio.html"), render(collect(extras), { player: "cdn", document: false, subtitle }));
 	writeFileSync(join(outDir, "studio-local.html"), render(collect(extras), { player: "cdn", document: true, subtitle }));
 	return reports;

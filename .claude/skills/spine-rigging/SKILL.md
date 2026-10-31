@@ -19,7 +19,8 @@ stretchyman, tank, vine, sack, celestial-circus, diamond, …). Read the art fir
 4. Parts that bend get meshes: `mesh_generate` with `bones` for automatic weights. Rigid parts stay regions.
 5. Constraints (`constraint_add`), see the recipes below.
 6. Animate: `anim_create` (say `loop`), then `anim_gait`, `anim_oscillate`, `anim_tween`, `anim_bounce`,
-   `anim_set_keys`, `anim_slot_keys`.
+   `anim_set_keys`, `anim_slot_keys`; constraints over time with `anim_constraint_keys`, flipbooks with
+   `anim_sequence_keys`.
 7. Check after every step that matters: `validate`, `motion_check`, `preview` (look at the frames).
    `project_status` shows the rig as text. Lock approved parts with `lock_set`; undo with `history_revert`.
 8. `export` when done. With Spine available, `npm run spine:check` round-trips through the real editor.
@@ -64,9 +65,16 @@ Write it as `{type: "transform", name, bones, source, properties: {x: {to: {x: {
   turns a control bone's rotation into animation time (one turn = one second here).
 - Time-driven: `time` sets a fixed pose of the animation (expression presets, turn-around sheets).
 
-**Image sequences** — frame-by-frame effects on one attachment (diamond shines: 7 frames). Paths are
-`<path><number>` with `start` and `digits`; animate with sequence keys (`mode`: hold, once, loop, pingpong,
-and reverse variants; `delay` per frame).
+**Image sequences** — frame-by-frame effects on one attachment (diamond shines: 7 frames). `sequence_import`
+takes the PNG frames in order; play them with `anim_sequence_keys` (`mode`: hold, once, loop, pingpong and
+reverse variants; `delay` seconds per frame, e.g. 1/12; `index` to start or hold a frame).
+
+**Keying constraints** (`anim_constraint_keys`) — channels left out keep the setup value.
+- Path `position` 0→1 over a loop rolls treads or runs sparks round a closed path; `spacing` stretches a chain.
+- Physics `wind` / `gravity` keys for gusts; `reset` at a cut or teleport; `mix` 0 to switch physics off.
+- Transform mixes fade a follow in and out; IK `mix` 0→1 hands a limb from FK to IK (pick-up, plant a foot).
+- Slider `time` scrubs its animation (expression or brightness presets).
+- A transform has mixes only for the properties it drives; others read as 0 in the runtime.
 
 ## Things the Spine Editor is strict about
 
@@ -81,5 +89,5 @@ rydspine already handles these; keep them in mind when editing JSON by hand:
 
 ## Not yet in the tools
 
-Keys for constraint timelines (path position/spacing/mix, transform mixes, slider time, sequence keys)
-have no dedicated tool yet; they round-trip through import/export and `.skel` conversion.
+Paths weighted to several control bones, event and draw order keys, custom bezier curves; these round-trip
+through import/export and `.skel` conversion but have no tool yet.

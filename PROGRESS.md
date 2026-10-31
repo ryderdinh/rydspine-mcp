@@ -158,8 +158,17 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Skill `.claude/skills/spine-rigging/SKILL.md`: quy trình dùng tool, công thức từng loại constraint với số liệu từ 30 dự án ví dụ (physics dùng nhiều nhất: inertia ≈ 0,37, strength ≈ 135, damping ≈ 0,82; transform `mixX: -1` để giữ cố định; path `percent` + `chainScale` cho tay chân cao su, `length` + `chain` cho xích), và các quy tắc Spine Editor khắt khe.
 - Test: 35 test đạt; `spine:check` 6/6 (car lỗi xuất ảnh một lần, chạy lại được).
 
+### 2026-10-31 (tiếp 5)
+
+- Tool `anim_constraint_keys`: key cho mọi timeline constraint theo đúng cách runtime 4.3 đọc JSON. IK (mix, softness, bend, compress, stretch), mix của transform/path, position/spacing của path, physics (inertia, strength, damping, mass, wind, gravity, mix, reset; constraint `""` = mọi physics), slider (time, mix). Kênh bỏ trống giữ giá trị setup; ease tạo một bezier cho mỗi kênh. Lưu ý: transform chỉ có mix ở kênh được điều khiển, kênh khác runtime đọc là 0.
+- Tool `sequence_import`: các PNG thành một attachment chuỗi ảnh (ảnh `<tên>/<tên>01…`, `start` 1, `digits` 2), slot mới hoặc thêm vào slot có sẵn. Tool `anim_sequence_keys`: mode, frame bắt đầu, delay. `validate` kiểm mọi frame; `preview` vẽ đúng frame đang hiện.
+- `constraint_remove` xoá luôn timeline của constraint (trước đây runtime từ chối skeleton). Độ dài animation tính cả timeline constraint và chuỗi ảnh.
+- Asset nghiệm thu thứ 7 `lantern` (đèn lồng) dùng cả ba tool: lửa chuỗi ảnh 4 frame, gió physics có key, slider, đốm sáng chạy theo path đóng, mix transform có key. `spine:check` 7/7, lantern lệch 0,0000 sau khi qua Spine.
+- Tìm và ghi các MCP Spine của cộng đồng vào `REFERENCES.md`, kèm ý tưởng nên lấy.
+- Test: 38 test đạt.
+
 ## Việc tiếp theo
 
 1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
-2. Tool tạo key cho timeline của constraint và chuỗi ảnh (path position/spacing/mix, mix của transform, time của slider, key chuỗi ảnh) và cho tạo attachment chuỗi ảnh; path có trọng số theo vài xương điều khiển như trong ví dụ.
+2. Path có trọng số theo vài xương điều khiển như trong ví dụ; key `event` và `drawOrder`; curve bezier do người dùng đưa; `mirror_animation`; pivot theo layer `[pivot]` khi import PSD (ý tưởng từ `REFERENCES.md`).
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

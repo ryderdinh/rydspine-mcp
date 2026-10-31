@@ -5,7 +5,21 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { bounce, EASES, gait, oscillate, PROPERTIES, SLOT_PROPERTIES, tween, writeKeys, writeSlotKeys } from "./motion.js";
+import {
+	bounce,
+	CONSTRAINT_PROPERTIES,
+	EASES,
+	gait,
+	oscillate,
+	PROPERTIES,
+	SEQUENCE_MODES,
+	SLOT_PROPERTIES,
+	tween,
+	writeConstraintKeys,
+	writeKeys,
+	writeSequenceKeys,
+	writeSlotKeys,
+} from "./motion.js";
 import { diffVersions } from "./diff.js";
 import { importProject, syncProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
@@ -13,6 +27,7 @@ import { importPsd } from "./psd.js";
 import {
 	addBone,
 	addConstraint,
+	importSequence,
 	assertUnlocked,
 	describe,
 	generateMesh,
@@ -360,6 +375,31 @@ export function createServer(): McpServer {
 	);
 
 	server.registerTool(
+		"sequence_import",
+		{
+			description:
+				"Import PNG frames as one image sequence attachment (flipbook: flames, sparkles, blinking lights, " +
+				"hand-drawn effects), centered at world (x, y). Makes a new slot on top, or adds the attachment to slot. " +
+				"Play it with anim_sequence_keys.",
+			inputSchema: {
+				project,
+				name: z.string().describe("Attachment name (and the new slot's name)"),
+				images: z.array(z.string()).min(2).describe("PNG files, in playing order"),
+				slot: z.string().optional().describe("Existing slot to add the attachment to"),
+				x: z.number().optional(),
+				y: z.number().optional(),
+				bone: z.string().optional().describe("Bone for a new slot (default root)"),
+				setup: z.number().int().min(0).optional().describe("Frame shown in the setup pose (default 0)"),
+			},
+		},
+		(a) =>
+			edit(a.project, `import sequence ${a.name}`, (ws) => {
+				const r = importSequence(ws, a);
+				return [`${r.slot}: ${r.frames} frames, ${r.width}x${r.height}`, ...r.warnings.map((w) => `warning: ${w}`)].join("\n");
+			}),
+	);
+
+	server.registerTool(
 		"attachment_update",
 		{
 			description: "Move, rotate or scale a region attachment inside its slot.",
@@ -685,6 +725,80 @@ export function createServer(): McpServer {
 			},
 		},
 		(a) => edit(a.project, `slot keys ${a.animation} ${a.slot}.${a.property}`, (ws) => writeSlotKeys(ws, a.animation, a.slot, a.property, a.keys)),
+	);
+
+	server.registerTool(
+		"anim_constraint_keys",
+		{
+			description:
+				"Key a constraint over time. ik mix: mix (or value), softness, bendPositive, compress, stretch. " +
+				"transform mix: mixRotate, mixX, mixY, mixScaleX, mixScaleY, mixShearY. path: position or spacing (value), " +
+				"mix (mixRotate, mixX, mixY); animate position to slide bones along the path or roll treads. " +
+				"physics: inertia, strength, damping, mass, wind, gravity, mix (value) or reset (time only; constraint \"\" = all " +
+				"physics). slider: time (value, seconds into its animation) or mix. Channels a key leaves out keep the setup " +
+				"value. Replaces keys between the first and last given time.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				constraint: z.string(),
+				property: z.enum(CONSTRAINT_PROPERTIES),
+				keys: z
+					.array(
+						z.object({
+							time: z.number().min(0),
+							value: z.number().optional(),
+							mix: z.number().optional(),
+							softness: z.number().optional(),
+							bendPositive: z.boolean().optional(),
+							compress: z.boolean().optional(),
+							stretch: z.boolean().optional(),
+							mixRotate: z.number().optional(),
+							mixX: z.number().optional(),
+							mixY: z.number().optional(),
+							mixScaleX: z.number().optional(),
+							mixScaleY: z.number().optional(),
+							mixShearY: z.number().optional(),
+							ease: z.enum(EASES).optional(),
+						}),
+					)
+					.min(1),
+			},
+		},
+		(a) =>
+			edit(a.project, `constraint keys ${a.animation} ${a.constraint || "physics"}.${a.property}`, (ws) =>
+				writeConstraintKeys(ws, a.animation, a.constraint, a.property, a.keys),
+			),
+	);
+
+	server.registerTool(
+		"anim_sequence_keys",
+		{
+			description:
+				"Play an image sequence attachment (see sequence_import): from each key on, mode (hold, once, loop, pingpong, " +
+				"onceReverse, loopReverse, pingpongReverse; default hold), starting frame index (0-based) and delay " +
+				"(seconds per frame, e.g. 1/12). Replaces keys between the first and last given time.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				slot: z.string(),
+				attachment: z.string().optional().describe("Default: the slot's setup attachment"),
+				skin: z.string().optional(),
+				keys: z
+					.array(
+						z.object({
+							time: z.number().min(0),
+							mode: z.enum(SEQUENCE_MODES).optional(),
+							index: z.number().int().min(0).optional(),
+							delay: z.number().min(0).optional(),
+						}),
+					)
+					.min(1),
+			},
+		},
+		(a) =>
+			edit(a.project, `sequence keys ${a.animation} ${a.slot}`, (ws) =>
+				writeSequenceKeys(ws, a.animation, a.slot, a.attachment, a.keys, a.skin),
+			),
 	);
 
 	server.registerTool(

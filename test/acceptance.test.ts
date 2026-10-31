@@ -45,7 +45,7 @@ function spineEditorProblems(doc: Json): string[] {
 it("builds all acceptance assets with passing checks", async () => {
 	const out = mkdtempSync(join(tmpdir(), "rydspine-acceptance-"));
 	const reports = await buildAll(out);
-	expect(reports.map((r) => r.project)).toEqual(["hero", "dragon", "tree", "chest", "car", "logo"]);
+	expect(reports.map((r) => r.project)).toEqual(["hero", "dragon", "tree", "chest", "car", "logo", "lantern"]);
 	for (const r of reports) for (const c of r.checks) expect(c.ok, `${r.project} ${c.name}: ${c.detail}`).toBe(true);
 	for (const r of reports) {
 		const doc = JSON.parse(readFileSync(join(out, r.project, `${r.project}.json`), "utf8"));

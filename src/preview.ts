@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { ClippingAttachment, MeshAttachment, RegionAttachment } from "@esotericsoftware/spine-core";
 import { composePage, imageSize, pack } from "./atlas.js";
-import { FPS, type Loaded, load, play } from "./runtime.js";
+import { FPS, type Loaded, load, play, shownPath } from "./runtime.js";
 import { UserError, type Workspace } from "./workspace.js";
 
 const require = createRequire(import.meta.url);
@@ -79,16 +79,18 @@ function drawFrame(
 		} else if (att instanceof RegionAttachment) {
 			const v = new Array<number>(8);
 			att.computeWorldVertices(slot, att.getOffsets(slot.appliedPose), v, 0, 2);
-			const { width, height } = imageSize(join(ws.imagesDir, `${att.path}.png`));
+			const path = shownPath(att, slot.appliedPose);
+			const { width, height } = imageSize(join(ws.imagesDir, `${path}.png`));
 			const [bl, ul, ur] = [pt(v[0], v[1]), pt(v[2], v[3]), pt(v[4], v[5])];
 			pt(v[6], v[7]);
 			const m = affine([[0, 0], [width, 0], [0, height]], [ul, ur, bl]);
-			if (m) parts.push(`<use href="#${ids.get(att.path!)}" transform="${m}"${opacity}/>`);
+			if (m) parts.push(`<use href="#${ids.get(path)}" transform="${m}"${opacity}/>`);
 		} else if (att instanceof MeshAttachment) {
 			const n = att.worldVerticesLength;
 			const v = new Array<number>(n);
 			att.computeWorldVertices(skeleton, slot, 0, n, v, 0, 2);
-			const { width, height } = imageSize(join(ws.imagesDir, `${att.path}.png`));
+			const path = shownPath(att, slot.appliedPose);
+			const { width, height } = imageSize(join(ws.imagesDir, `${path}.png`));
 			const uv = att.regionUVs;
 			const t = att.triangles;
 			for (let i = 0; i < t.length; i += 3) {
@@ -100,7 +102,7 @@ function drawFrame(
 				const poly = q.map(([x, y]) => `${f2(x)},${f2(y)}`).join(" ");
 				parts.push(
 					`<clipPath id="${id}"><polygon points="${poly}" stroke="#000" stroke-width="0.6"/></clipPath>` +
-						`<g clip-path="url(#${id})"><use href="#${ids.get(att.path!)}" transform="${m}"${opacity}/></g>`,
+						`<g clip-path="url(#${id})"><use href="#${ids.get(path)}" transform="${m}"${opacity}/></g>`,
 				);
 			}
 		}

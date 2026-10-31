@@ -8,3 +8,4 @@
 - `SPINE_ACTIVATION_CODE` chỉ được đọc từ biến môi trường: không in ra, không ghi vào code, git hay file kết quả. Che mã trong mọi output (`sed "s/$SPINE_ACTIVATION_CODE/<CODE>/g"`).
 - Kiểm tra bằng Spine Editor thật: `npm run spine:check` (cần mạng tới `*.esotericsoftware.com` và gói `x11-xserver-utils`).
 - Kiểm phần đọc `.skel` trên ví dụ chính thức của Spine: `npm run skel:examples`. Cách rig theo ví dụ của Spine: skill `.claude/skills/spine-rigging/SKILL.md` (cập nhật khi học thêm mẫu mới).
+- Dự án tham khảo (MCP Spine của cộng đồng, runtime chính thức): `REFERENCES.md`; ghi thêm khi tìm được nguồn mới.

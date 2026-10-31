@@ -10,6 +10,7 @@ import {
 	MixFrom,
 	Physics,
 	RegionAttachment,
+	type Sequence,
 	Skeleton,
 	type SkeletonData,
 	SkeletonJson,
@@ -40,6 +41,18 @@ export function load(ws: Workspace): Loaded {
 	skeleton.setupPose();
 	skeleton.updateWorldTransform(Physics.none);
 	return { data, skeleton };
+}
+
+/** Image paths of a region or mesh; an image sequence numbers its frames (path01, path02, ...). */
+export function framePaths(att: RegionAttachment | MeshAttachment): string[] {
+	const s = att.sequence;
+	return s.hasPathSuffix() ? s.regions.map((_, i) => s.getPath(att.path!, i)) : [att.path!];
+}
+
+/** Image a slot shows now: the current frame of a sequence. */
+export function shownPath(att: RegionAttachment | MeshAttachment, pose: Parameters<Sequence["resolveIndex"]>[0]): string {
+	const s = att.sequence;
+	return s.hasPathSuffix() ? s.getPath(att.path!, s.resolveIndex(pose)) : att.path!;
 }
 
 export function boneByName(skeleton: Skeleton, name: string): Bone {
@@ -161,8 +174,8 @@ export function validate(ws: Workspace): Report {
 		for (const entry of skin.getAttachments()) {
 			const att = entry.attachment;
 			if (!(att instanceof RegionAttachment || att instanceof MeshAttachment)) continue;
-			if (!existsSync(join(ws.imagesDir, `${att.path}.png`)))
-				errors.push(`missing image "${att.path}" for ${skin.name}/${entry.placeholder}`);
+			for (const path of framePaths(att))
+				if (!existsSync(join(ws.imagesDir, `${path}.png`))) errors.push(`missing image "${path}" for ${skin.name}/${entry.placeholder}`);
 			if (att instanceof MeshAttachment && att.bones) {
 				const v = att.vertices;
 				for (let i = 0, n = att.bones.length, vi = 0; i < n; ) {

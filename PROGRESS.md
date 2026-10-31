@@ -126,6 +126,12 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 
 ## Việc tiếp theo
 
+0. **Kiểm tra bằng Spine Editor thật trên cloud** (người dùng đã thêm biến `SPINE_ACTIVATION_CODE` vào môi trường; license do chính người dùng mua):
+   - mã chỉ đọc từ biến môi trường, không in ra log, không ghi vào code/git/file trong repo;
+   - tải launcher Linux từ `https://esotericsoftware.com/launcher/linux` (file tar.gz) vào scratchpad, chạy Spine 4.3.26 dưới `xvfb-run`;
+   - dùng Spine CLI import 6 asset nghiệm thu (`npm run acceptance`), xuất lại JSON, so với bản gốc bằng `history_diff`/runtime, chụp hình từng animation;
+   - nếu ổn, thêm script `npm run spine:check` (bỏ qua khi không có biến).
+
 1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
 2. Hỗ trợ thêm khi đọc `.skel`: transform/path/slider constraint, chuỗi ảnh.
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

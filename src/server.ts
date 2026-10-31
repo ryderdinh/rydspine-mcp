@@ -220,6 +220,7 @@ export function createServer(): McpServer {
 	);
 
 	const point = z.object({ x: z.number(), y: z.number() });
+	const leg = z.object({ start: point.describe("Shoulder / hip"), joint: point.describe("Elbow / knee, as drawn"), foot: point });
 	const template = z.discriminatedUnion("kind", [
 		z
 			.object({
@@ -288,14 +289,35 @@ export function createServer(): McpServer {
 				parts: z.record(z.string(), z.string()).optional().describe("slot -> bone"),
 			})
 			.describe("Two-legged character: hips, torso, neck, head, IK arms (left-arm-*) and legs (left-leg-*)"),
+		z
+			.object({
+				kind: z.literal("quadruped"),
+				hips: point.describe("Where the back legs attach"),
+				chest: point.describe("Where the front legs attach"),
+				neck: point,
+				head: point,
+				frontLeft: leg,
+				frontRight: leg,
+				backLeft: leg,
+				backRight: leg,
+				tail: z.array(point).min(2).optional().describe("Base to tip"),
+				tailSegments: z.number().int().min(1).max(12).optional(),
+				tailSlots: z.array(z.string()).optional(),
+				parts: z.record(z.string(), z.string()).optional().describe("slot -> bone"),
+			})
+			.describe(
+				"Four-legged animal: body, neck, head, IK legs (front-left-leg-*, back-right-leg-* ...), optional tail. " +
+					"Walk with anim_gait: back-left 0, front-left 0.25, back-right 0.5, front-right 0.75",
+			),
 	]);
 
 	server.registerTool(
 		"rig_template",
 		{
 			description:
-				"Build a common structure from a few world-space points (joints read off the art): chain, hinge, wheel, " +
-				"limb (2 bones + IK) or biped. Faster and more consistent than adding bones one by one.",
+				"Build a common structure from a few world-space points (joints read off the art): chain (also tails, " +
+				"necks and wings: bind the wing art and flap with anim_oscillate + delayPerBone), hinge, wheel, limb " +
+				"(2 bones + IK), biped or quadruped. Faster and more consistent than adding bones one by one.",
 			inputSchema: { project, template },
 		},
 		({ project, template }) =>
@@ -309,7 +331,9 @@ export function createServer(): McpServer {
 								? templates.wheel(ws, template)
 								: template.kind === "limb"
 									? templates.limb(ws, template)
-									: templates.biped(ws, template);
+									: template.kind === "biped"
+										? templates.biped(ws, template)
+										: templates.quadruped(ws, template);
 				return `bones: ${bones.join(", ")}`;
 			}),
 	);

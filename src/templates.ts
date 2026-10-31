@@ -183,3 +183,53 @@ export function biped(ws: Workspace, s: BipedSpec): string[] {
 	for (const [slot, bone] of Object.entries(s.parts ?? {})) bind(ws, slot, bone);
 	return bones;
 }
+
+export interface QuadrupedLeg {
+	/** Shoulder or hip. */
+	start: Point;
+	/** Elbow or knee, as drawn. */
+	joint: Point;
+	foot: Point;
+}
+
+export interface QuadrupedSpec {
+	/** Where the back legs attach (pelvis) and where the front legs attach (withers). */
+	hips: Point;
+	chest: Point;
+	neck: Point;
+	head: Point;
+	frontLeft: QuadrupedLeg;
+	frontRight: QuadrupedLeg;
+	backLeft: QuadrupedLeg;
+	backRight: QuadrupedLeg;
+	/** Tail base to tip; omit for no tail. */
+	tail?: Point[];
+	tailSegments?: number;
+	/** slot -> bone (body, neck, head, front-left-leg-upper, back-right-leg-lower, tail1 ...). */
+	parts?: Record<string, string>;
+	/** Slots bound and meshed along the tail. */
+	tailSlots?: string[];
+}
+
+/**
+ * Four-legged animals: a body bone from hips to chest, neck and head, four IK legs with feet planted on
+ * root, and an optional tail chain. Walk with anim_gait, feet phased back-left 0, front-left 0.25,
+ * back-right 0.5, front-right 0.75.
+ */
+export function quadruped(ws: Workspace, s: QuadrupedSpec): string[] {
+	const bones: string[] = [];
+	bones.push(boneAlong(ws, "body", "root", s.hips, s.chest));
+	bones.push(boneAlong(ws, "neck", "body", s.chest, s.neck));
+	bones.push(boneAlong(ws, "head", "neck", s.neck, s.head));
+	const legs: [string, QuadrupedLeg][] = [
+		["back-left-leg", s.backLeft],
+		["back-right-leg", s.backRight],
+		["front-left-leg", s.frontLeft],
+		["front-right-leg", s.frontRight],
+	];
+	for (const [name, leg] of legs) bones.push(...limb(ws, { name, parent: "body", start: leg.start, joint: leg.joint, end: leg.foot }));
+	if (s.tail && s.tail.length >= 2)
+		bones.push(...chain(ws, { name: "tail", parent: "body", points: s.tail, segments: s.tailSegments, slots: s.tailSlots }));
+	for (const [slot, bone] of Object.entries(s.parts ?? {})) bind(ws, slot, bone);
+	return bones;
+}

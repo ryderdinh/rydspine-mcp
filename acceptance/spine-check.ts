@@ -183,7 +183,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 	}
 	for (const r of results) {
 		console.log(`${r.ok ? "ok  " : "FAIL"} ${r.asset}`);
-		for (const c of r.animations) console.log(`       ${c.animation}: ${c.frames} frames, max difference ${c.worst.toFixed(4)}${c.where ? ` (${c.where})` : ""}`);
+		for (const c of r.animations) console.log(`       ${c.animation}: ${c.frames} frames, max difference ${c.worst.toFixed(4)}${c.where ? ` (${c.where})` : ""}${c.events ? `, ${c.events} events match` : ""}`);
 		for (const p of r.problems) console.log(`       ! ${p}`);
 		for (const sheet of r.sheets) console.log(`       sheet ${sheet}`);
 	}

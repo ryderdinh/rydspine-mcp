@@ -166,8 +166,14 @@ describe("rig_template", () => {
 			stride: 40,
 			lift: 12,
 			bob: 3,
+			event: "footstep",
 		});
 		expect(r.text).toMatch(/ground speed 66\.667 px\/s/);
+		expect(r.text).toMatch(/feet land at: left-leg-target 0; right-leg-target 0\.5 \(event footstep keyed\)/);
+		expect(Workspace.open(p).doc.animations.walk.events).toEqual([
+			{ time: 0, name: "footstep", string: "left-leg-target" },
+			{ time: 0.5, name: "footstep", string: "right-leg-target" },
+		]);
 		expect((await h.ok("validate", { project: p })).text).toMatch(/walk: 1\.000s, loop seam 0\.0/);
 		const check = await h.ok("motion_check", { project: p, animation: "walk", feet: ["left-leg-target", "right-leg-target"] });
 		expect(check.text).toMatch(/^OK/);

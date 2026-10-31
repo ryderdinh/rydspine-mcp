@@ -73,6 +73,16 @@ export interface ConstraintJson {
 	[key: string]: unknown;
 }
 
+/** An event's setup values; keys inherit whatever they leave out. */
+export interface EventJson {
+	int?: number;
+	float?: number;
+	string?: string;
+	audio?: string;
+	volume?: number;
+	balance?: number;
+}
+
 export interface AnimationJson {
 	bones?: Record<string, Record<string, ValueKey[]>>;
 	slots?: Record<string, Record<string, unknown[]>>;
@@ -95,6 +105,7 @@ export interface SkeletonDoc {
 	slots: SlotJson[];
 	constraints: ConstraintJson[];
 	skins: SkinJson[];
+	events?: Record<string, EventJson>;
 	animations: Record<string, AnimationJson>;
 	[key: string]: unknown;
 }

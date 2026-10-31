@@ -84,6 +84,7 @@ import {
 	TranslateYTimeline,
 	type VertexAttachment,
 } from "@esotericsoftware/spine-core";
+import { orderToOffsets } from "./draworder.js";
 import type { SkeletonDoc } from "./types.js";
 import { UserError } from "./workspace.js";
 
@@ -439,25 +440,6 @@ function writeSkin(data: SkeletonData, skin: Skin, unsupported: Set<string>): Js
 	return o;
 }
 
-function longestIncreasing(seq: number[]): Set<number> {
-	const tails: number[] = [];
-	const prev = new Array<number>(seq.length).fill(-1);
-	seq.forEach((v, i) => {
-		let lo = 0;
-		let hi = tails.length;
-		while (lo < hi) {
-			const mid = (lo + hi) >> 1;
-			if (seq[tails[mid]] < v) lo = mid + 1;
-			else hi = mid;
-		}
-		prev[i] = lo > 0 ? tails[lo - 1] : -1;
-		tails[lo] = i;
-	});
-	const out = new Set<number>();
-	for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = prev[i]) out.add(seq[i]);
-	return out;
-}
-
 /** Recovers a bezier's control points from the runtime's samples, for one value channel. */
 function bezier(tl: CurveTimeline, frame: number, channel: number, t1: number, v1: number, t2: number, v2: number): number[] | "stepped" | undefined {
 	const curves = (tl as unknown as { curves: ArrayLike<number> }).curves;
@@ -650,12 +632,8 @@ function writeAnimation(data: SkeletonData, anim: Animation, unsupported: Set<st
 				const order = orders[i];
 				if (order) {
 					// Slots on the longest run already in setup order stay put; only the others are listed.
-					const keep = longestIncreasing(order);
-					k.offsets = order
-						.map((slotIndex, position) => ({ slotIndex, position }))
-						.filter((e) => !keep.has(e.slotIndex))
-						.sort((a, b) => a.slotIndex - b.slotIndex)
-						.map((e) => ({ slot: data.slots[e.slotIndex].name, offset: e.position - e.slotIndex }));
+					const offsets = orderToOffsets(data.slots.map((s) => s.name), order);
+					if (offsets) k.offsets = offsets;
 				}
 				return k;
 			});

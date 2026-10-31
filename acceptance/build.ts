@@ -130,7 +130,7 @@ async function hero(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	};
 
 	await ok("anim_create", { project, name: "run", loop: true });
-	await ok("anim_gait", { project, animation: "run", feet, body: "hips", ...run });
+	await ok("anim_gait", { project, animation: "run", feet, body: "hips", ...run, event: "footstep" });
 	await armSwing("run", run.period);
 	await ok("anim_set_keys", { project, animation: "run", bone: "torso", property: "rotate", keys: [{ time: 0, value: -8 }, { time: run.period, value: -8 }] });
 
@@ -138,7 +138,7 @@ async function hero(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	const a = "run-stop-swing";
 	const runEnd = run.period * 2;
 	await ok("anim_create", { project, name: a, loop: false });
-	const g = await ok("anim_gait", { project, animation: a, feet, body: "hips", ...run, cycles: 2 });
+	const g = await ok("anim_gait", { project, animation: a, feet, body: "hips", ...run, cycles: 2, event: "footstep" });
 	const speed = Number(g.text.match(/ground speed ([\d.]+)/)![1]);
 	await ok("anim_set_keys", { project, animation: a, bone: "root", property: "translatex", keys: [{ time: 0, value: 0 }, { time: runEnd, value: speed * runEnd }] });
 	await armSwing(a, runEnd);
@@ -261,12 +261,17 @@ async function chest(ok: Ok, call: Ok, paint: Painter): Promise<AssetReport> {
 	for (const slot of ["glow", "box", "lock"]) await ok("slot_update", { project, name: slot, bone: "chest" });
 	await ok("rig_template", { project, template: { kind: "hinge", name: "lid", parent: "chest", pivot: { x: -62, y: 60 }, tip: { x: 62, y: 60 }, slots: ["lid"] } });
 	await ok("anim_create", { project, name: "open", loop: false });
-	await ok("anim_tween", { project, animation: "open", bones: ["lid"], property: "rotate", to: 72, start: 0.15, duration: 0.3, ease: "ease-out" });
+	// A custom bezier: the lid snaps open fast and eases into the top of its swing.
+	await ok("anim_tween", { project, animation: "open", bones: ["lid"], property: "rotate", to: 72, start: 0.15, duration: 0.3, ease: [0.15, 0.85, 0.35, 1] });
 	await ok("anim_bounce", { project, animation: "open", bones: ["lid"], property: "rotate", from: 72, to: 62, start: 0.45, duration: 0.5, style: "spring", bounces: 2 });
 	await ok("anim_tween", { project, animation: "open", bones: ["chest"], property: "translatey", to: 14, duration: 0.15, ease: "ease-out" });
 	await ok("anim_bounce", { project, animation: "open", bones: ["chest"], property: "translatey", from: 14, to: 0, start: 0.15, duration: 0.55, style: "drop", bounces: 1, height: 0.25 });
 	await ok("anim_bounce", { project, animation: "open", bones: ["chest"], property: "scaley", from: 0.9, to: 1, start: 0.35, duration: 0.35, style: "spring" });
 	await ok("anim_slot_keys", { project, animation: "open", slot: "glow", property: "alpha", keys: [{ time: 0, value: 0 }, { time: 0.2, value: 0, ease: "ease-out" }, { time: 0.6, value: 0.85, ease: "ease-in-out" }, { time: 1.2, value: 0.55 }] });
+	// Once the lid is up, the glow draws in front of it; sound and effect cues for the game.
+	await ok("anim_draw_order_keys", { project, animation: "open", keys: [{ time: 0.3, order: ["lid", "glow"] }] });
+	await ok("event_define", { project, name: "creak", audio: "creak.ogg", volume: 0.7 });
+	await ok("anim_event_keys", { project, animation: "open", keys: [{ time: 0.15, name: "creak" }, { time: 0.4, name: "sparkle", int: 12, string: "gold" }, { time: 0.9, name: "creak", volume: 0.3, balance: -0.5 }] });
 	await validated(ok, call, project, r);
 	return r;
 }

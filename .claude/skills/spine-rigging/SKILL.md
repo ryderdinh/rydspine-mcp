@@ -20,7 +20,7 @@ stretchyman, tank, vine, sack, celestial-circus, diamond, …). Read the art fir
 5. Constraints (`constraint_add`), see the recipes below.
 6. Animate: `anim_create` (say `loop`), then `anim_gait`, `anim_oscillate`, `anim_tween`, `anim_bounce`,
    `anim_set_keys`, `anim_slot_keys`; constraints over time with `anim_constraint_keys`, flipbooks with
-   `anim_sequence_keys`.
+   `anim_sequence_keys`, game cues with `anim_event_keys`, layer swaps with `anim_draw_order_keys`.
 7. Check after every step that matters: `validate`, `motion_check`, `preview` (look at the frames).
    `project_status` shows the rig as text. Lock approved parts with `lock_set`; undo with `history_revert`.
 8. `export` when done. With Spine available, `npm run spine:check` round-trips through the real editor.
@@ -76,6 +76,16 @@ reverse variants; `delay` seconds per frame, e.g. 1/12; `index` to start or hold
 - Slider `time` scrubs its animation (expression or brightness presets).
 - A transform has mixes only for the properties it drives; others read as 0 in the runtime.
 
+## Events, draw order and curves
+
+- Events are how the game hears the animation: footsteps on the contact frames of a walk (`anim_gait`
+  reports them, and keys them with `event: "footstep"`), `hit` on the impact frame, sound cues with `audio`. Define the values once with
+  `event_define` (spineboy: `footstep`, `shoot`; raptor: `roar`); keys override only what changes.
+- Draw order keys swap layers mid-animation: an arm swinging behind the body, a card's back showing as it
+  turns, a lid falling behind the glow. List only the slots that trade places; each key holds until the next.
+- `ease` takes a CSS cubic-bezier `[x1, y1, x2, y2]` when no preset fits: `[0.15, 0.85, 0.35, 1]` snaps then
+  settles, y above 1 overshoots. x must stay within 0..1.
+
 ## Things the Spine Editor is strict about
 
 rydspine already handles these; keep them in mind when editing JSON by hand:
@@ -89,5 +99,5 @@ rydspine already handles these; keep them in mind when editing JSON by hand:
 
 ## Not yet in the tools
 
-Paths weighted to several control bones, event and draw order keys, custom bezier curves; these round-trip
-through import/export and `.skel` conversion but have no tool yet.
+Paths weighted to several control bones, mirroring an animation, point and bounding box attachments; these
+round-trip through import/export and `.skel` conversion but have no tool yet.

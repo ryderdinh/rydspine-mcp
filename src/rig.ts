@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { type BonePose, Vector2 } from "@esotericsoftware/spine-core";
 import { imageSize, readPng } from "./atlas.js";
 import { type ContourOptions, contourMesh } from "./contour.js";
+import { remapDrawOrders } from "./draworder.js";
 import { boneByName, load } from "./runtime.js";
 import type { AttachmentJson, BoneJson, ConstraintJson, MeshJson, RegionJson, SlotJson } from "./types.js";
 import { checkName, UserError, type Workspace } from "./workspace.js";
@@ -337,9 +338,12 @@ export function updateSlot(ws: Workspace, u: SlotUpdate): SlotJson {
 	if (u.color) slot.color = u.color;
 	if (u.blend) slot.blend = u.blend;
 	if (u.drawOrder !== undefined) {
+		const before = ws.doc.slots.map((s) => s.name);
 		const i = ws.doc.slots.indexOf(slot);
 		ws.doc.slots.splice(i, 1);
 		ws.doc.slots.splice(Math.max(0, Math.min(u.drawOrder, ws.doc.slots.length)), 0, slot);
+		// Draw order keys are offsets from the setup order; keep each key showing the same order.
+		remapDrawOrders(ws.doc.animations, before, ws.doc.slots.map((s) => s.name));
 	}
 	return slot;
 }
@@ -636,8 +640,13 @@ export function describe(ws: Workspace): string {
 	lines.push("animations:");
 	for (const [name, a] of Object.entries(ws.doc.animations)) {
 		const tracks = Object.entries(a.bones ?? {}).flatMap(([b, tl]) => Object.keys(tl).map((t) => `${b}.${t}`));
+		const events = (a.events ?? []) as { time?: number; name: string }[];
+		if (events.length) tracks.push(`events ${events.map((e) => `${e.name}@${e.time ?? 0}`).join(" ")}`);
+		if (a.drawOrder) tracks.push(`draw order (${(a.drawOrder as unknown[]).length} keys)`);
 		lines.push(`  ${name}${ws.meta.loops[name] ? " (loop)" : ""}: ${tracks.join(", ") || "empty"}`);
 	}
+	const events = Object.entries(ws.doc.events ?? {});
+	if (events.length) lines.push(`events: ${events.map(([n, e]) => (Object.keys(e).length ? `${n} ${JSON.stringify(e)}` : n)).join(", ")}`);
 	const named = ws.doc.skins.filter((s) => s.name !== "default");
 	if (named.length) {
 		lines.push("skins:");

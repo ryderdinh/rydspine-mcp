@@ -167,8 +167,18 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Tìm và ghi các MCP Spine của cộng đồng vào `REFERENCES.md`, kèm ý tưởng nên lấy.
 - Test: 38 test đạt.
 
+### 2026-10-31 (tiếp 6)
+
+- Tool `event_define` (giá trị int/float/string, audio kèm volume/balance; `remove` xoá cả key) và `anim_event_keys` (key chỉ ghi giá trị khác định nghĩa; event chưa có thì tự định nghĩa; cùng tên cùng thời điểm thì thay). `events` được đặt trước `animations` như Spine ghi.
+- Tool `anim_draw_order_keys`: mỗi key cho thứ tự slot từ sau ra trước, đủ hoặc chỉ các slot đổi chỗ (chúng đổi các vị trí đang giữ trong setup); không có `order` là về setup. Offset ghi gọn như Spine (dãy tăng dài nhất giữ nguyên), dùng chung `src/draworder.ts` với phần đọc `.skel`. `slot_update` đổi thứ tự slot thì tính lại mọi key để mỗi key vẫn hiện đúng thứ tự cũ.
+- `anim_gait` báo thời điểm từng chân chạm đất; tuỳ chọn `event` (vd `footstep`) key event ở đó, string là tên xương chân. Asset `hero` dùng cho cả hai animation chạy.
+- Mọi `ease` (key xương, slot, constraint, tween) nhận thêm bezier kiểu CSS `[x1, y1, x2, y2]`; x phải trong 0..1, y được vượt để tạo nảy.
+- `project_status` liệt kê event và key thứ tự vẽ. `spine:check` so thêm các event mỗi animation bắn ra (thời điểm, giá trị).
+- Asset `chest`: nắp bật bằng bezier tự đưa, quầng sáng vẽ đè lên nắp khi mở, event `creak` (audio) và `sparkle`.
+- Test: 41 test đạt.
+
 ## Việc tiếp theo
 
 1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
-2. Path có trọng số theo vài xương điều khiển như trong ví dụ; key `event` và `drawOrder`; curve bezier do người dùng đưa; `mirror_animation`; pivot theo layer `[pivot]` khi import PSD (ý tưởng từ `REFERENCES.md`).
+2. Path có trọng số theo vài xương điều khiển như trong ví dụ; `mirror_animation` / `mirror_bones`; pivot theo layer `[pivot]` khi import PSD; attachment `point` / `boundingbox` (ý tưởng từ `REFERENCES.md`).
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

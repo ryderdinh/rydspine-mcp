@@ -3,6 +3,7 @@
 import {
 	type Attachment,
 	AtlasAttachmentLoader,
+	type Event,
 	MeshAttachment,
 	MixFrom,
 	Physics,
@@ -88,6 +89,8 @@ export interface Compared {
 	worst: number;
 	where: string;
 	problems: string[];
+	/** Events the animation fires, the same before and after when problems is empty. */
+	events?: number;
 }
 
 /** Plays one animation in both skeletons, frame by frame, with physics. `phase` (0..1) shifts the samples off
@@ -134,6 +137,14 @@ export function compareAnimation(asset: string, a: SkeletonData, b: SkeletonData
 		if (out.problems.length > 5) break;
 	}
 	if (out.worst > tolerance) out.problems.push(`max difference ${out.worst.toFixed(3)} (${out.where})`);
+	const fired = (s: SkeletonData, anim: typeof animA) => {
+		const events: Event[] = [];
+		anim.apply(new Skeleton(s), -1, anim.duration, false, events, 1, MixFrom.current, false, false, false);
+		return events.map((e) => `${e.data.name}@${e.time.toFixed(3)} ${e.intValue} ${e.floatValue.toFixed(3)} "${e.stringValue}" ${e.volume.toFixed(2)} ${e.balance.toFixed(2)}`);
+	};
+	const [ea, eb] = [fired(a, animA), fired(b, animB)];
+	if (ea.join("|") !== eb.join("|")) out.problems.push(`events differ: ${ea.join(", ")} became ${eb.join(", ")}`);
+	out.events = ea.length;
 	return out;
 }
 

@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
 	bounce,
 	CONSTRAINT_PROPERTIES,
+	defineEvent,
 	EASES,
 	gait,
 	oscillate,
@@ -15,7 +16,10 @@ import {
 	SEQUENCE_MODES,
 	SLOT_PROPERTIES,
 	tween,
+	removeEvent,
 	writeConstraintKeys,
+	writeDrawOrderKeys,
+	writeEventKeys,
 	writeKeys,
 	writeSequenceKeys,
 	writeSlotKeys,
@@ -80,6 +84,10 @@ function edit(project: string, message: string, fn: (ws: Workspace) => string | 
 const project = z.string().describe("Project name");
 const space = z.enum(["local", "world"]).optional().describe("Coordinate space for x/y/rotation (default local)");
 const property = z.enum(PROPERTIES);
+const ease = z
+	.union([z.enum(EASES), z.tuple([z.number().min(0).max(1), z.number(), z.number().min(0).max(1), z.number()])])
+	.optional()
+	.describe("Curve of the segment after the key: a preset, or a CSS cubic-bezier [x1, y1, x2, y2] (y may overshoot 0..1)");
 const chain = {
 	bones: z.array(z.string()).min(1).describe("Bones to animate; for a chain, list root to tip"),
 	delayPerBone: z.number().optional().describe("Seconds each bone lags the previous one (follow-through)"),
@@ -622,7 +630,7 @@ export function createServer(): McpServer {
 				animation: z.string(),
 				bone: z.string(),
 				property,
-				keys: z.array(z.object({ time: z.number().min(0), value: z.number(), ease: z.enum(EASES).optional() })).min(1),
+				keys: z.array(z.object({ time: z.number().min(0), value: z.number(), ease: ease })).min(1),
 				range: z.tuple([z.number(), z.number()]).optional(),
 			},
 		},
@@ -668,7 +676,7 @@ export function createServer(): McpServer {
 				from: z.number().optional(),
 				start: z.number().min(0).optional(),
 				duration: z.number().positive(),
-				ease: z.enum(EASES).optional(),
+				ease: ease,
 				anticipation: z.number().min(0).max(1).optional(),
 				...chain,
 			},
@@ -718,7 +726,7 @@ export function createServer(): McpServer {
 							value: z.number().min(0).max(1).optional(),
 							color: z.string().optional(),
 							name: z.string().nullable().optional(),
-							ease: z.enum(EASES).optional(),
+							ease: ease,
 						}),
 					)
 					.min(1),
@@ -758,7 +766,7 @@ export function createServer(): McpServer {
 							mixScaleX: z.number().optional(),
 							mixScaleY: z.number().optional(),
 							mixShearY: z.number().optional(),
-							ease: z.enum(EASES).optional(),
+							ease: ease,
 						}),
 					)
 					.min(1),
@@ -768,6 +776,75 @@ export function createServer(): McpServer {
 			edit(a.project, `constraint keys ${a.animation} ${a.constraint || "physics"}.${a.property}`, (ws) =>
 				writeConstraintKeys(ws, a.animation, a.constraint, a.property, a.keys),
 			),
+	);
+
+	server.registerTool(
+		"event_define",
+		{
+			description:
+				"Define an event a game listens for (footstep, hit, spawn, sound cue), or change its setup values; " +
+				"anim_event_keys keys inherit them. audio is a path under the skeleton's audio folder; volume and balance " +
+				"apply to audio events. remove deletes the event and every key that fires it.",
+			inputSchema: {
+				project,
+				name: z.string(),
+				int: z.number().int().optional(),
+				float: z.number().optional(),
+				string: z.string().optional(),
+				audio: z.string().optional(),
+				volume: z.number().min(0).max(1).optional(),
+				balance: z.number().min(-1).max(1).optional(),
+				remove: z.boolean().optional(),
+			},
+		},
+		({ project, remove, ...d }) =>
+			edit(project, `${remove ? "remove" : "define"} event ${d.name}`, (ws) => (remove ? removeEvent(ws, d.name) : defineEvent(ws, d))),
+	);
+
+	server.registerTool(
+		"anim_event_keys",
+		{
+			description:
+				"Fire events at times in an animation (footsteps on contact frames, a hit on impact, a sound cue). Values a " +
+				"key leaves out come from event_define; undefined events are defined on the fly. A key replaces an event of " +
+				"the same name at the same time; replace clears the animation's events first.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				keys: z
+					.array(
+						z.object({
+							time: z.number().min(0),
+							name: z.string(),
+							int: z.number().int().optional(),
+							float: z.number().optional(),
+							string: z.string().optional(),
+							volume: z.number().min(0).max(1).optional(),
+							balance: z.number().min(-1).max(1).optional(),
+						}),
+					)
+					.min(1),
+				replace: z.boolean().optional(),
+			},
+		},
+		(a) => edit(a.project, `events ${a.animation}`, (ws) => writeEventKeys(ws, a.animation, a.keys, a.replace)),
+	);
+
+	server.registerTool(
+		"anim_draw_order_keys",
+		{
+			description:
+				"Change which slots draw in front during an animation (an arm swinging behind the body, a card turning over). " +
+				"Each key's order lists slot names back to front: all slots, or just the ones that move, which then trade " +
+				"the places they hold in setup (e.g. [body, arm] puts arm in front of body). No order: back to setup. " +
+				"Draw order holds until the next key. Replaces keys between the first and last given time.",
+			inputSchema: {
+				project,
+				animation: z.string(),
+				keys: z.array(z.object({ time: z.number().min(0), order: z.array(z.string()).optional() })).min(1),
+			},
+		},
+		(a) => edit(a.project, `draw order ${a.animation}`, (ws) => writeDrawOrderKeys(ws, a.animation, a.keys)),
 	);
 
 	server.registerTool(
@@ -806,7 +883,8 @@ export function createServer(): McpServer {
 		{
 			description:
 				"Walk or run cycle in place for IK feet (e.g. biped left-leg-target phase 0, right-leg-target phase 0.5). " +
-				"Planted feet slide back at constant speed; reports the ground speed to move the character at. " +
+				"Planted feet slide back at constant speed; reports the ground speed to move the character at and when each " +
+				"foot lands (event keys a footstep event there, string = foot bone). " +
 				"Walk: contact ~0.6, run: ~0.35 with more lift and bob.",
 			inputSchema: {
 				project,
@@ -820,6 +898,7 @@ export function createServer(): McpServer {
 				bob: z.number().min(0).optional(),
 				start: z.number().min(0).optional(),
 				cycles: z.number().int().min(1).max(20).optional(),
+				event: z.string().optional().describe("Event fired as each foot lands, e.g. footstep"),
 			},
 		},
 		(a) => edit(a.project, `gait ${a.animation}`, (ws) => gait(ws, a)),

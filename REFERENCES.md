@@ -28,5 +28,6 @@ Danh mục để tìm thêm: [glama.ai](https://glama.ai/mcp/servers?query=spine
 
 - Đã làm: tool key cho mọi timeline constraint (cách "kênh bỏ trống giữ giá trị setup" giống UmutFarukDilli), thêm slider
   và chuỗi ảnh (họ chưa có).
-- Nên làm: key `event` và `drawOrder`; curve bezier chuẩn hoá do người dùng đưa; `mirror_animation` / `mirror_bones`;
+- Đã làm: key `event` và `drawOrder`, curve bezier chuẩn hoá kiểu CSS cho mọi `ease` (theo UmutFarukDilli).
+- Nên làm: `mirror_animation` / `mirror_bones`;
   pivot theo layer đánh dấu `[pivot]` trong `psd_import`; attachment `point` / `boundingbox`.

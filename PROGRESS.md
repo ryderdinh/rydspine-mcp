@@ -8,7 +8,7 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 |---|---|---|
 | 0. Spike & chốt | ✅ Xong (trừ Spine CLI) | Runtime 4.3 chạy headless. Bỏ Spine CLI khỏi v1 vì máy người dùng không được cài Spine |
 | 1. Lõi | ✅ Xong bản đầu | MCP server, workspace, lịch sử phiên bản, validate, export |
-| 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận, layer `[pivot]` → xương), project Spine 4.3 có sẵn dạng JSON hoặc binary `.skel`. Ảnh phẳng chưa tách bộ phận để sau v1 |
+| 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận, layer `[pivot]` → xương), project Spine 4.3 có sẵn dạng JSON hoặc binary `.skel`, ảnh phẳng (`image_split`: tự tách mảng rời hoặc cắt theo polygon, vẽ bù phần bị che đơn giản) |
 | 3. Rig | ✅ Xong bản đầu | Bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân), skin (bộ trang phục, biến thể) |
 | 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
 | 5. Kiểm tra & preview | ✅ Xong bản đầu | validate (kể cả mesh bị gập, ép dẹt, kéo giãn), kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio** |
@@ -226,8 +226,18 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Demo trong phiên (không commit, art do Codex vẽ): robot vẫy tay (IK, chuỗi ăng-ten, physics), tấm vải bị kéo lên (mesh nhiều xương + physics; validate bắt mesh gập và đã chỉnh), rèm cuốn từng nấc (clipping đi theo cuộn rèm, event `notch`).
 - Test: 50/50 đạt.
 
+### 2026-10-31 (tiếp 12)
+
+- Đã merge `claude/psd-pivots` vào `main` (merge commit `a7f92d9`, merge bằng git vì máy không có `gh`).
+- Tách ảnh phẳng (`src/split.ts`), thêm 2 tool (tổng 48):
+  - `image_inspect`: ảnh có lưới toạ độ đánh số (pixel ảnh, y hướng xuống), nền dò được, các mảng rời và khung của chúng.
+  - `image_split`: không có `parts` thì mỗi mảng rời trên nền là một bộ phận (mảng nhỏ hơn `minArea` gộp vào mảng gần nhất); có `parts` thì cắt theo polygon, liệt kê từ sau ra trước, chỗ chồng nhau thuộc bộ phận phía trước, pixel lẻ trong `snap` px gộp vào bộ phận gần nhất. Nền: `auto` (trong suốt nếu viền trong suốt, không thì màu phổ biến nhất ở viền, loang từ viền nên vùng trắng nằm kín bên trong vẫn giữ), `transparent` hoặc mã màu. `overlap` vẽ bù phần bị bộ phận phía trước che bằng cách loang màu mép vào, chỉ trong polygon của bộ phận. Trả overlay tô màu từng bộ phận (pixel chưa thuộc ai màu magenta); `dryRun` chỉ trả overlay. Nhập như `psd_import` (gốc toạ độ mặc định giữa đáy).
+  - Test `test/split.test.ts` (5 ca). Tổng 55/55 test qua.
+- Thử thật trên nhân vật Codex vẽ (1254x1254, nền trắng, không commit): 6 bộ phận (2 tay, 2 chân, thân, đầu) sau 2 lần chỉnh polygon, rig 7 xương, animation vẫy tay. Validate OK, Spine 4.3.26 nhập được. Bài học (đã ghi vào skill): phải khoanh cả phần bị che (cổ dưới đầu, đầu đùi dưới áo), nếu không khớp hở trắng khi xoay.
+- Hạn chế: vẽ bù chỉ loang màu (không vẽ lại chi tiết); viền khử răng cưa với nền màu giữ quầng nhạt; dưới nách còn vệt nhỏ khi polygon của tay rộng hơn dáng tay.
+
 ## Việc tiếp theo
 
 1. Chuyển repo sang public, bật GitHub Pages (`docs/`), thử bộ cài thật trên một máy Mac và một máy Windows khác.
 2. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
-3. Tách ảnh phẳng thành bộ phận (để sau v1).
+3. Tách ảnh phẳng: đã có bản đầu. Có thể làm tiếp: AI gợi ý polygon tự động, vẽ bù tốt hơn (inpaint bằng model ảnh), làm mờ quầng viền với nền màu.

@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { PNG } from "pngjs";
 import { z } from "zod";
 import {
 	bounce,
@@ -29,6 +30,7 @@ import { mirrorAnimation, mirrorBones } from "./mirror.js";
 import { importProject, syncProject } from "./importer.js";
 import { exportProject, rasterize, renderSvg } from "./preview.js";
 import { importPsd } from "./psd.js";
+import { fit, gridImage, importSplit, inspect, readImage } from "./split.js";
 import {
 	addBone,
 	addConstraint,
@@ -53,7 +55,7 @@ import { checkName, UserError, Workspace } from "./workspace.js";
 
 const INSTRUCTIONS = `rydspine builds Spine 4.3 rigs and animations as files.
 Existing Spine exports can be brought in with project_import and edited with the same tools.
-Workflow: project_create -> psd_import or image_import (place each part at its world position) -> rig_template (chain/hinge/wheel/limb/biped) or bone_add (joints, world space)
+Workflow: project_create -> psd_import or image_import (place each part at its world position; a flat picture: image_inspect + image_split) -> rig_template (chain/hinge/wheel/limb/biped) or bone_add (joints, world space)
 -> slot_update (bind parts to bones, keepWorld) -> mesh_generate / constraint_add where parts bend or follow
 -> anim_create + anim_oscillate / anim_tween / anim_bounce / anim_set_keys -> validate -> preview -> export.
 Coordinates: world space is y-up, units are pixels, rotations are degrees counter-clockwise.
@@ -61,6 +63,7 @@ Animation values are offsets from the setup pose (scalex/scaley are multipliers)
 Every edit is a new version; history_revert undoes. Look at preview images before reporting success.`;
 
 type Result = CallToolResult;
+const pngBase64 = (png: PNG) => PNG.sync.write(png).toString("base64");
 const text = (s: string): Result => ({ content: [{ type: "text", text: s }] });
 
 async function run(fn: () => Promise<Result> | Result): Promise<Result> {
@@ -214,6 +217,106 @@ export function createServer(): McpServer {
 				const ws = Workspace.open(project);
 				const data = readFileSync(ws.imagePath(image)).toString("base64");
 				return { content: [{ type: "image", data, mimeType: "image/png" }] };
+			}),
+	);
+
+	const background = z
+		.string()
+		.optional()
+		.describe('"auto" (default: transparent if the border is, else the most common border color), "transparent", or "#rrggbb"');
+	const tolerance = z.number().min(0).max(255).optional().describe("Per-channel difference still counted as background color (default 24)");
+
+	server.registerTool(
+		"image_inspect",
+		{
+			description:
+				"Look at a flat picture before image_split: returns it with a labeled grid in image pixels (x right, y down " +
+				"from the top-left), plus its size, detected background and the separate blobs with their boxes.",
+			inputSchema: {
+				image: z.string().describe("Path to a PNG"),
+				step: z.number().int().min(5).optional().describe("Grid spacing in image pixels (default about a tenth of the size)"),
+				background,
+				tolerance,
+			},
+		},
+		({ image, step, background, tolerance }) =>
+			run(() => {
+				const png = readImage(image);
+				const grid = gridImage(png, step);
+				const lines = [...inspect(png, background, tolerance), `grid every ${grid.step} px${grid.scale < 1 ? `; shown at ${Math.round(grid.scale * 100)}%` : ""}`];
+				return {
+					content: [
+						{ type: "text", text: lines.join("\n") },
+						{ type: "image", data: pngBase64(grid.png), mimeType: "image/png" },
+					],
+				};
+			}),
+	);
+
+	server.registerTool(
+		"image_split",
+		{
+			description:
+				"Split a flat picture (one PNG, no layers) into parts and import them like psd_import (one image + slot each, " +
+				"at its place, origin bottom-center by default). Without `parts`, every separate blob on the background " +
+				"becomes a part (part-1 is the largest). With `parts`, outline each part with a polygon in image pixels " +
+				"(read them off image_inspect), listed back to front: where outlines overlap the later part owns the pixels, so " +
+				"trace a part tightly where it lies over another (loosely is fine against the background, which is cut away), " +
+				"and stray pixels near an outline join it. overlap=N paints in up to N pixels of what the parts in front hide " +
+				"(smearing the part's own edge colors, only inside its outline: outline the whole part, hidden piece included), " +
+					"so joints do not open gaps when parts turn; use about the joint's " +
+				"thickness/4 on parts behind a joint. Returns an overlay (each part tinted, unassigned pixels magenta); " +
+				"dryRun=true only returns it.",
+			inputSchema: {
+				project,
+				image: z.string().describe("Path to the flat PNG"),
+				parts: z
+					.array(
+						z.object({
+							name: z.string(),
+							polygon: z.array(z.tuple([z.number(), z.number()])).min(3).describe("Outline [[x, y], ...] in image pixels, y down"),
+							overlap: z.number().min(0).max(256).optional(),
+						}),
+					)
+					.optional()
+					.describe("Parts back to front; omit to split into separate blobs"),
+				background,
+				tolerance,
+				overlap: z.number().min(0).max(256).optional().describe("Default overlap for every part (default 0)"),
+				minArea: z.number().int().min(1).optional().describe("Blob mode: smaller blobs join the nearest part (default 64)"),
+				snap: z.number().int().min(0).max(64).optional().describe("Outline mode: stray pixels this close join a part (default 4)"),
+				prefix: z.string().optional().describe("Blob mode: names are <prefix>-1, <prefix>-2, ... (default part)"),
+				origin: z.enum(["bottom-center", "center", "top-left"]).optional(),
+				dryRun: z.boolean().optional().describe("Only show the split; import nothing"),
+			},
+		},
+		({ project, dryRun, ...spec }) =>
+			run(() => {
+				const ws = Workspace.open(project);
+				const r = importSplit(ws, spec, dryRun);
+				const s = r.split;
+				const lines = [
+					`canvas ${r.canvas}; background ${s.background}; ${r.parts.length} parts (back to front):`,
+					...r.parts.map(
+						(p) =>
+							`  ${p.slot} [${p.color}]: ${p.width}x${p.height} at (${p.x}, ${p.y}), ${p.pixels} px` +
+							`${p.filled ? `, ${p.filled} px painted in` : ""}`,
+					),
+				];
+				if (s.merged) lines.push(`${s.merged} small blob(s) joined the nearest part`);
+				if (s.unassigned) lines.push(`${s.unassigned} foreground pixels belong to no part (magenta); widen the outlines or raise snap`);
+				if (dryRun) lines.push("dry run: nothing imported");
+				else {
+					load(ws);
+					lines.push(`saved as version ${ws.commit(`split ${spec.image} into ${r.parts.length} parts`)}`);
+				}
+				const view = fit(s.overlay).png;
+				return {
+					content: [
+						{ type: "text", text: lines.join("\n") },
+						{ type: "image", data: pngBase64(view), mimeType: "image/png" },
+					],
+				};
 			}),
 	);
 

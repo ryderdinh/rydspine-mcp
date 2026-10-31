@@ -10,6 +10,7 @@
     "typecheck": "tsc",
     "spike:check": "tsx spike/runtime-check.ts",
     "acceptance": "tsx acceptance/build.ts",
+    "spine:check": "tsx acceptance/spine-check.ts",
     "ui": "tsx src/ui.ts"
   },
   "dependencies": {

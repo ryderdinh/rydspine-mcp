@@ -381,7 +381,10 @@ export function generateMesh(ws: Workspace, spec: MeshSpec): { vertices: number;
 	let vertices = local.map(round);
 	if (spec.bones?.length) vertices = weigh(ws, slot.bone, local, spec.bones, spec.maxInfluences ?? 3);
 	const uvs = uv.flatMap(([u, v]) => [Math.round(u * 1e5) / 1e5, Math.round(v * 1e5) / 1e5]);
-	const mesh: MeshJson = { type: "mesh", uvs, triangles, vertices, hull, width: r.width, height: r.height };
+	// Edges (vertex index * 2, pairs) are editor-only data; without them Spine Editor warns on import
+	// that the file was exported without nonessential data. The hull outline is the only edge loop.
+	const edges = Array.from({ length: hull }, (_, i) => [i * 2, ((i + 1) % hull) * 2]).flat();
+	const mesh: MeshJson = { type: "mesh", uvs, triangles, vertices, hull, edges, width: r.width, height: r.height };
 	if (r.path) mesh.path = r.path;
 	skin.attachments[slot.name][name] = mesh;
 	return { vertices: uv.length, triangles: triangles.length / 3, warnings };
@@ -435,7 +438,12 @@ function weigh(ws: Workspace, slotBone: string, local: number[], boneNames: stri
 		const total = scored.reduce((s, x) => s + x.score, 0);
 		const weights = scored.map((x) => Math.round((x.score / total) * 1000) / 1000);
 		weights[0] = Math.round((1 - weights.slice(1).reduce((s, x) => s + x, 0)) * 1000) / 1000;
-		const kept = scored.map((x, k) => ({ ...x, weight: weights[k] })).filter((x) => x.weight > 0);
+		// Spine Editor fails to import some weighted meshes ("Index -2 out of bounds") unless each vertex
+		// lists its bones in skeleton order; the runtime accepts any order.
+		const kept = scored
+			.map((x, k) => ({ ...x, weight: weights[k] }))
+			.filter((x) => x.weight > 0)
+			.sort((p, q) => p.b.index - q.b.index);
 		out.push(kept.length);
 		for (const { b, weight } of kept) {
 			const p = b.pose.worldToLocal(new Vector2(w.x, w.y));

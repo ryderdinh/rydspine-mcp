@@ -44,6 +44,8 @@ Chạy `npm run ui` (hoặc gọi tool `ui_open`) rồi mở http://127.0.0.1:51
 
 Chạy `npm run acceptance` để dựng 6 asset mẫu (nhân vật, rồng, cây, rương, xe, logo) qua tool MCP. Kết quả nằm trong `acceptance/out/`: file xuất cho từng asset, `report.json` và trang `studio-local.html`.
 
+Chạy `npm run spine:check` để kiểm 6 asset bằng Spine Editor thật: Spine import từng file JSON, xuất lại, rồi runtime so hai bản từng khung; Spine cũng vẽ dải khung hình cho mỗi animation. Cần đặt `SPINE_CLI` trỏ tới Spine (ví dụ `/Applications/Spine.app/Contents/MacOS/Spine`), hoặc trên Linux đặt `SPINE_ACTIVATION_CODE` để script tự tải Spine. Thiếu cả hai thì bỏ qua.
+
 Mỗi thao tác lưu thành một phiên bản: `history_list` để xem, `history_diff` để so sánh, `history_revert` để quay lại, `lock_set` để khóa phần đã duyệt. Sau khi sửa trong Spine Editor và export lại JSON, dùng `project_sync` để đưa bản sửa về thành phiên bản mới.
 
 **Đầu ra của `export`:** `<tên>.json`, `<tên>.atlas`, `<tên>.png` dùng cho runtime Spine 4.3, và `<tên>.html` để xem animation trên trình duyệt. Người có Spine mở file JSON bằng **File → Import Data** để có project `.spine`.

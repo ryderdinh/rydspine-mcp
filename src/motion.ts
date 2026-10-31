@@ -20,6 +20,14 @@ const BEZIER: Record<Exclude<Ease, "linear" | "stepped">, [number, number, numbe
 
 const EPS = 1e-4;
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
+/**
+ * Key times on (or within 2ms of) a 30fps frame are written as that exact frame: Spine Editor snaps
+ * near-frame times when it imports, so 0.033 would otherwise move to 1/30 and shift the pose.
+ */
+const rt = (t: number) => {
+	const frame = Math.round(t * 30);
+	return Math.abs(t * 30 - frame) < 0.06 ? Math.round((frame / 30) * 1e8) / 1e8 : r3(t);
+};
 const neutral = (p: Property) => (p === "scalex" || p === "scaley" ? 1 : 0);
 
 /** Spine stores a segment's curve as bezier control points in (time, value) space. */
@@ -72,7 +80,7 @@ export function writeKeys(ws: Workspace, anim: string, bone: string, property: P
 	const kept = tl.filter((k) => (k.time ?? 0) < start - EPS || (k.time ?? 0) > end + EPS);
 
 	const fresh: ValueKey[] = sorted.map((k, i) => {
-		const out: ValueKey = { time: r3(k.time), value: r3(k.value) };
+		const out: ValueKey = { time: rt(k.time), value: r3(k.value) };
 		const next = sorted[i + 1];
 		const curve = k.curve ?? (next && k.ease ? easeCurve(k.ease, k.time, k.value, next.time, next.value) : undefined);
 		if (curve) out.curve = curve;
@@ -122,18 +130,18 @@ export function writeSlotKeys(ws: Workspace, anim: string, slot: string, propert
 		const next = sorted[i + 1];
 		if (property === "attachment") {
 			if (k.name === undefined) throw new UserError("attachment keys need a name (or null)");
-			return { time: r3(k.time), name: k.name };
+			return { time: rt(k.time), name: k.name };
 		}
 		if (property === "alpha") {
 			if (k.value === undefined) throw new UserError("alpha keys need a value");
-			const out: ValueKey = { time: r3(k.time), value: r3(k.value) };
+			const out: ValueKey = { time: rt(k.time), value: r3(k.value) };
 			const curve = next && k.ease ? easeCurve(k.ease, k.time, k.value, next.time, next.value ?? k.value) : undefined;
 			if (curve) out.curve = curve;
 			return out;
 		}
 		if (!k.color || !/^[0-9a-fA-F]{8}$/.test(k.color)) throw new UserError("rgba keys need color as RRGGBBAA");
 		if (k.ease && k.ease !== "linear" && k.ease !== "stepped") throw new UserError("rgba keys support linear or stepped only");
-		return k.ease === "stepped" ? { time: r3(k.time), color: k.color, curve: "stepped" } : { time: r3(k.time), color: k.color };
+		return k.ease === "stepped" ? { time: rt(k.time), color: k.color, curve: "stepped" } : { time: rt(k.time), color: k.color };
 	});
 	const a = animation(ws, anim);
 	a.slots ??= {};

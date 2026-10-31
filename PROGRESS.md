@@ -13,7 +13,7 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 | 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
 | 5. Kiểm tra & preview | ✅ Xong bản đầu | validate (kể cả mesh bị gập, ép dẹt, kéo giãn), kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio** |
 | 6. Chỉnh sửa | ✅ Xong bản đầu | Khóa, revert, sửa theo khoảng thời gian, so sánh phiên bản (`history_diff`), nhập lại JSON đã sửa trong Spine (`project_sync`) |
-| 7. Đầu ra & nghiệm thu | 🟡 Một phần | Bộ 6 asset nghiệm thu chạy tự động và đạt hết kiểm tra, nhưng dùng art tự vẽ. Spine Editor 4.3.26 đã import được hero. Chưa nghiệm thu trên art thật |
+| 7. Đầu ra & nghiệm thu | 🟡 Một phần | Bộ 6 asset nghiệm thu chạy tự động và đạt hết kiểm tra, nhưng dùng art tự vẽ. Cả 6 asset đã qua vòng Spine Editor 4.3.26 thật (`npm run spine:check`). Chưa nghiệm thu trên art thật |
 
 ## Quyết định đã chốt
 
@@ -124,14 +124,25 @@ Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.m
 - Người dùng import `hero.json` vào Spine Editor 4.3.26: thành công, hình và xương đúng chỗ. Chỉ có cảnh báo lệch phiên bản (file ghi 4.3.75-beta) → đổi phiên bản mặc định thành 4.3.26.
 - Test: 30 test đạt.
 
+### 2026-10-31 (tiếp 3)
+- Đã merge đợt trước ([ryderdinh/rydspine-mcp#4](https://github.com/ryderdinh/rydspine-mcp/pull/4), [ryderdinh/rydspine-mcp#5](https://github.com/ryderdinh/rydspine-mcp/pull/5)).
+- Chạy Spine Editor 4.3.26 Professional thật trên cloud:
+  - launcher tải từ trang license của người dùng, kích hoạt bằng `SPINE_ACTIVATION_CODE`; mã không bị in ra và không nằm trong file nào của repo hay kết quả;
+  - cần mở mạng cho `*.esotericsoftware.com` (máy chủ API kích hoạt và tải editor), cài `x11-xserver-utils` (libxrandr) để Spine vẽ ảnh dưới Xvfb.
+- `npm run spine:check` (`acceptance/spine-check.ts`):
+  - dựng 6 asset, cho Spine import JSON thành `.spine` rồi xuất lại JSON (kèm nonessential);
+  - runtime phát cả hai bản từng khung, kể cả physics, so mọi xương, màu slot và đỉnh attachment;
+  - Spine xuất chuỗi PNG từng animation, ghép thành dải 8 khung;
+  - dùng `SPINE_CLI` nếu có; nếu không, trên Linux có `SPINE_ACTIVATION_CODE` thì tự tải launcher vào `~/.cache/rydspine/spine`; thiếu cả hai thì bỏ qua.
+- Lỗi chỉ Spine Editor phát hiện (runtime chấp nhận), đã sửa:
+  - **mesh có trọng số không import được** ("Index -2 out of bounds", dragon và tree): mỗi đỉnh phải liệt kê xương theo thứ tự của skeleton; trước đây xếp theo trọng số;
+  - **cảnh báo thiếu nonessential** khi import: mesh giờ ghi `edges` (viền);
+  - **hero lệch IK sau khi qua Spine**: Spine bắt thời điểm key gần khung hình về đúng khung (0.033 → 1/30). Giờ rydspine ghi luôn thời điểm đúng khung khi lệch dưới 2 ms.
+- Kết quả: cả 6 asset đạt, lệch tối đa 0,0011 px; dải hình do Spine vẽ đúng ý đồ.
+- Test nghiệm thu kiểm thêm 3 quy tắc trên (test hỏng nếu bỏ phần sửa). Test: 30 test đạt.
+
 ## Việc tiếp theo
 
-0. **Kiểm tra bằng Spine Editor thật trên cloud** (người dùng đã thêm biến `SPINE_ACTIVATION_CODE` vào môi trường; license do chính người dùng mua):
-   - mã chỉ đọc từ biến môi trường, không in ra log, không ghi vào code/git/file trong repo;
-   - tải launcher Linux từ `https://esotericsoftware.com/launcher/linux` (file tar.gz) vào scratchpad, chạy Spine 4.3.26 dưới `xvfb-run`;
-   - dùng Spine CLI import 6 asset nghiệm thu (`npm run acceptance`), xuất lại JSON, so với bản gốc bằng `history_diff`/runtime, chụp hình từng animation;
-   - nếu ổn, thêm script `npm run spine:check` (bỏ qua khi không có biến).
-
 1. Nghiệm thu trên art thật khi có asset; xác nhận animation chạy đúng trong Spine Editor.
-2. Hỗ trợ thêm khi đọc `.skel`: transform/path/slider constraint, chuỗi ảnh.
+2. Hỗ trợ thêm khi đọc `.skel`: transform/path/slider constraint, chuỗi ảnh. Giờ có Spine thật để tạo file mẫu.
 3. Tách ảnh phẳng thành bộ phận (để sau v1).

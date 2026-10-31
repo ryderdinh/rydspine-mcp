@@ -6,7 +6,8 @@ import { checkName, UserError, type Workspace } from "./workspace.js";
 import { assertUnlocked, findBone } from "./rig.js";
 import { load } from "./runtime.js";
 
-export const PROPERTIES = ["rotate", "translatex", "translatey", "scalex", "scaley", "shearx", "sheary"] as const;
+/** `scale` keys scalex and scaley together. */
+export const PROPERTIES = ["rotate", "translatex", "translatey", "scalex", "scaley", "scale", "shearx", "sheary"] as const;
 export type Property = (typeof PROPERTIES)[number];
 
 export const EASES = ["linear", "stepped", "ease-in", "ease-out", "ease-in-out", "back-in", "back-out"] as const;
@@ -22,20 +23,20 @@ const BEZIER: Record<Exclude<Ease, "linear" | "stepped">, [number, number, numbe
 	"back-out": [0.34, 1.56, 0.64, 1],
 };
 
-const EPS = 1e-4;
-const r3 = (n: number) => Math.round(n * 1000) / 1000;
+export const EPS = 1e-4;
+export const r3 = (n: number) => Math.round(n * 1000) / 1000;
 /**
  * Key times on (or within 2ms of) a 30fps frame are written as that exact frame: Spine Editor snaps
  * near-frame times when it imports, so 0.033 would otherwise move to 1/30 and shift the pose.
  */
-const rt = (t: number) => {
+export const rt = (t: number) => {
 	const frame = Math.round(t * 30);
 	return Math.abs(t * 30 - frame) < 0.06 ? Math.round((frame / 30) * 1e8) / 1e8 : r3(t);
 };
-const neutral = (p: Property) => (p === "scalex" || p === "scaley" ? 1 : 0);
+const neutral = (p: Property) => (p.startsWith("scale") ? 1 : 0);
 
 /** Spine stores a segment's curve as bezier control points in (time, value) space. */
-function easeCurve(ease: EaseSpec, t0: number, v0: number, t1: number, v1: number): Curve | undefined {
+export function easeCurve(ease: EaseSpec, t0: number, v0: number, t1: number, v1: number): Curve | undefined {
 	if (ease === "linear") return undefined;
 	if (ease === "stepped") return "stepped";
 	const [x1, y1, x2, y2] = typeof ease === "string" ? BEZIER[ease] : checkBezier(ease);
@@ -85,6 +86,10 @@ export function writeKeys(ws: Workspace, anim: string, bone: string, property: P
 	findBone(ws, bone);
 	if (!PROPERTIES.includes(property)) throw new UserError(`property must be one of ${PROPERTIES.join(", ")}`);
 	if (!keys.length) return;
+	if (property === "scale") {
+		for (const axis of ["scalex", "scaley"] as const) writeKeys(ws, anim, bone, axis, keys, range);
+		return;
+	}
 	const sorted = [...keys].sort((a, b) => a.time - b.time);
 	const [start, end] = range ?? [sorted[0].time, sorted[sorted.length - 1].time];
 	const tl = timeline(ws, anim, bone, property);
@@ -120,7 +125,7 @@ export function animDuration(ws: Workspace, anim: string): number {
 }
 
 /** Puts fresh keys in place of the old ones between their first and last time, keeping keys outside. */
-function mergeKeys<T extends { time?: number; curve?: unknown }>(old: T[], fresh: T[]): T[] {
+export function mergeKeys<T extends { time?: number; curve?: unknown }>(old: T[], fresh: T[]): T[] {
 	const [start, end] = [fresh[0].time ?? 0, fresh[fresh.length - 1].time ?? 0];
 	const kept = old.filter((k) => (k.time ?? 0) < start - EPS || (k.time ?? 0) > end + EPS);
 	// A kept key right before the range pointed its curve at a key that no longer exists.

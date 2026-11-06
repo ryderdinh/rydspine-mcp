@@ -280,7 +280,7 @@ Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirement
 
 ## Next steps
 
-0. Enable GitHub Pages on the `docs/` folder and private vulnerability reporting (Settings → Security, needed by `SECURITY.md`). The repo is public since 2026-11-06: CI passes on `main`, and the macOS installer from `docs/rydspine-setup-mac.zip` downloads from `codeload.github.com`, installs and starts the server with 49 tools. The Windows installer is still untried on Windows.
+0. Try the Windows installer on a Windows machine. Done on 2026-11-06: the repo is public; CI passes on `main` (actions on Node 24); private vulnerability reporting is on; GitHub Pages serves `docs/` at https://ryderdinh.github.io/rydspine-mcp/ through `.github/workflows/pages.yml` (the legacy Jekyll deploy hung on every run, so Pages builds from the workflow now), and its downloads match the repo; the macOS installer downloads from `codeload.github.com`, installs and starts the server with 49 tools.
 
 1. Acceptance on the user's own art when available (already passed on Spine's dragon art: `npm run real:art`).
 2. Flat picture splitting: first version done, edge halos removed. Possible follow-ups: AI-suggested polygons, better painting-in (inpainting with an image model).

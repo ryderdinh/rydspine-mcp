@@ -1,10 +1,11 @@
 # rydspine-mcp
 
-An MCP server that builds Spine 4.3 rigs and animations from natural-language requests. No Spine Editor install is needed: the server writes Spine data directly and checks it with the official Spine 4.3 runtime.
+An MCP server that builds Spine 4.3 rigs and animations from natural-language requests. The Spine Editor does not have to be installed: the server writes Spine data directly and checks it with the official Spine 4.3 runtime. Each user still needs their own Spine license, see [License](#license).
 
-- Progress: [`PROGRESS.md`](PROGRESS.md)
-- Plan: [`PLAN.md`](PLAN.md)
-- Requirements: [`REQUIREMENTS.md`](REQUIREMENTS.md)
+- Tool reference: [`TOOLS.md`](TOOLS.md)
+- Changes: [`CHANGELOG.md`](CHANGELOG.md)
+- Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md) · Security: [`SECURITY.md`](SECURITY.md)
+- Development notes (plan, requirements, working log): [`dev-notes/`](dev-notes/)
 
 ## Installation
 
@@ -63,18 +64,11 @@ Every operation is saved as a version: `history_list` to view, `history_diff` to
 
 **Coordinate conventions:** y points up, units are pixels, angles are degrees counter-clockwise. Animation values are offsets from the setup pose; only `scalex`/`scaley` are multipliers.
 
-Reference projects (official runtimes, community Spine MCPs): `REFERENCES.md`.
+Every tool, with all its parameters: [`TOOLS.md`](TOOLS.md). Reference projects (official runtimes, community Spine MCPs): `REFERENCES.md`.
 
 ## Contributing
 
-Issues and pull requests are welcome. Before sending a change:
-
-```bash
-npm run typecheck
-npm test            # downloads the coin sample from spine-runtimes once (needs network access)
-```
-
-Add a test for new tools or fixes, and keep `README.md` and the `spine-rigging` skill in step with tool changes. If you have the Spine Editor, `npm run spine:check` round-trips the acceptance assets through it. Never commit Spine license keys or activation codes; `SPINE_ACTIVATION_CODE` is read only from the environment.
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the code layout and the checks to run. Report security problems privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

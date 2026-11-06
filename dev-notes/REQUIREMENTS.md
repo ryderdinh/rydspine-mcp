@@ -1,5 +1,7 @@
 # rydspine-mcp — Product requirements
 
+> **Development notes.** The original product requirements, written before the code; "the user" is the person who commissioned the project. See [README.md](../README.md) for what rydspine does today.
+
 Status: draft for discussion. The detailed requirements below are proposals; the scope of the first version is not settled.
 
 ## 1. Confirmed goals

@@ -8,5 +8,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["spike/**/*.ts", "src/**/*.ts", "test/**/*.ts", "acceptance/**/*.ts"]
+  "include": ["scripts/**/*.ts", "spike/**/*.ts", "src/**/*.ts", "test/**/*.ts", "acceptance/**/*.ts"]
 }

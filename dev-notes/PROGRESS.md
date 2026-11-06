@@ -1,5 +1,7 @@
 # rydspine-mcp progress
 
+> **Development notes.** The working log of how rydspine was built, phase by phase, kept by its maintainer and the agents working on it; "the user" is the maintainer. For released changes see [CHANGELOG.md](../CHANGELOG.md).
+
 Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirements: `REQUIREMENTS.md`.
 
 ## Overview
@@ -269,10 +271,16 @@ Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirement
   - GitHub Actions workflow `.github/workflows/test.yml`: typecheck and tests on Ubuntu with Chromium;
   - git history checked: no activation codes, `.env`, keys or PSDs.
 - Tests: 59/59 passing.
+- Documentation for outside readers:
+  - `PLAN.md`, `REQUIREMENTS.md` and this log moved into `dev-notes/`, each headed as development notes;
+  - `TOOLS.md`, the reference for all 49 tools with every parameter (nested fields and `kind` variants included), generated from the server's own definitions by `npm run docs:tools` (`scripts/tools-doc.ts`); `test/tools-doc.test.ts` fails while it is stale;
+  - `CONTRIBUTING.md` (setup, code layout, checks, what never to commit), `SECURITY.md` (private reporting, trust boundaries), `CHANGELOG.md` (0.1.0, unreleased; `package.json` version 0.1.0);
+  - `CLAUDE.md` keeps only project rules; the maintainer's own preferences (Vietnamese replies, auto-merge, compaction reminders) moved to `CLAUDE.local.md`, which git ignores.
+- Tests: 60/60 passing.
 
 ## Next steps
 
-0. Make the repo public on GitHub, then enable GitHub Pages on the `docs/` folder and check the installers download from `codeload.github.com` and the CI workflow passes.
+0. Make the repo public on GitHub, then enable GitHub Pages on the `docs/` folder and private vulnerability reporting (Settings → Security, needed by `SECURITY.md`), and check the installers download from `codeload.github.com` and the CI workflow passes.
 
 1. Acceptance on the user's own art when available (already passed on Spine's dragon art: `npm run real:art`).
 2. Flat picture splitting: first version done, edge halos removed. Possible follow-ups: AI-suggested polygons, better painting-in (inpainting with an image model).

@@ -280,7 +280,7 @@ Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirement
 
 ## Next steps
 
-0. Make the repo public on GitHub, then enable GitHub Pages on the `docs/` folder and private vulnerability reporting (Settings → Security, needed by `SECURITY.md`), and check the installers download from `codeload.github.com` and the CI workflow passes.
+0. Enable GitHub Pages on the `docs/` folder and private vulnerability reporting (Settings → Security, needed by `SECURITY.md`). The repo is public since 2026-11-06: CI passes on `main`, and the macOS installer from `docs/rydspine-setup-mac.zip` downloads from `codeload.github.com`, installs and starts the server with 49 tools. The Windows installer is still untried on Windows.
 
 1. Acceptance on the user's own art when available (already passed on Spine's dragon art: `npm run real:art`).
 2. Flat picture splitting: first version done, edge halos removed. Possible follow-ups: AI-suggested polygons, better painting-in (inpainting with an image model).

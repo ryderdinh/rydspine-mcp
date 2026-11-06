@@ -278,6 +278,8 @@ Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirement
   - `CLAUDE.md` keeps only project rules; the maintainer's own preferences (Vietnamese replies, auto-merge, compaction reminders) moved to `CLAUDE.local.md`, which git ignores.
 - Tests: 60/60 passing.
 
+- README rewritten for GitHub: badges, link row, Features, Quick start, How it works, Verification, Configuration, Status. At the top, an animated showcase (`.github/readme/showcase.gif`, 1.2 MB): hero, dragon, chest and crab from the acceptance assets, rendered by `npm run acceptance && npm run showcase` (`scripts/showcase.ts`, needs ffmpeg).
+
 ## Next steps
 
 0. Try the Windows installer on a Windows machine. Done on 2026-11-06: the repo is public; CI passes on `main` (actions on Node 24); private vulnerability reporting is on; GitHub Pages serves `docs/` at https://ryderdinh.github.io/rydspine-mcp/ through `.github/workflows/pages.yml` (the legacy Jekyll deploy hung on every run, so Pages builds from the workflow now), and its downloads match the repo; the macOS installer downloads from `codeload.github.com`, installs and starts the server with 49 tools.

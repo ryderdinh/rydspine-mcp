@@ -1,5 +1,7 @@
 # rydspine-mcp — Implementation plan
 
+> **Development notes.** The original implementation plan, written before the code. Tool names and scope here are the plan, not the result; see [TOOLS.md](../TOOLS.md) and [README.md](../README.md) for what rydspine does today.
+
 Status: proposal, based on `REQUIREMENTS.md`. Items marked "(proposed)" are default choices to start with. They may change once section 10 of `REQUIREMENTS.md` is settled.
 
 ## 1. Scope of the first version (v1)

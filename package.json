@@ -1,6 +1,6 @@
 {
   "name": "rydspine-mcp",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "MCP server that rigs and animates Spine 4.3 skeletons from natural-language requests",
   "license": "MIT",
@@ -34,6 +34,7 @@
     "skel:examples": "tsx acceptance/skel-examples.ts",
     "real:art": "tsx acceptance/real-art.ts",
     "setup": "tsx src/setup.ts",
+    "docs:tools": "tsx scripts/tools-doc.ts",
     "installers": "tsx installer/build.ts"
   },
   "dependencies": {

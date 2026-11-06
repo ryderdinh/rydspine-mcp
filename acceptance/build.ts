@@ -1,4 +1,4 @@
-// Acceptance suite: builds the six reference assets from REQUIREMENTS.md §5 (plus a lantern for constraint and sequence timelines, and a crab for PSD pivots and mirroring) entirely through the MCP
+// Acceptance suite: builds the six reference assets from dev-notes/REQUIREMENTS.md §5 (plus a lantern for constraint and sequence timelines, and a crab for PSD pivots and mirroring) entirely through the MCP
 // tools, then validates, previews and exports each one.
 // Usage: npx tsx acceptance/build.ts [outDir]   (default acceptance/out)
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

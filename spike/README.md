@@ -1,30 +1,30 @@
-# Giai đoạn 0 — Spike
+# Phase 0 — Spike
 
-Mục tiêu: chứng minh vòng **skeleton JSON → `.spine` → export → runtime 4.3** chạy được trước khi viết phần lõi.
+Goal: prove that the **skeleton JSON → `.spine` → export → 4.3 runtime** loop works before writing the core.
 
-## Nội dung
+## Contents
 
-- `fixtures/swing/`: skeleton mẫu viết tay theo định dạng JSON 4.3. Gồm 7 bones, 4 slots, region và mesh có weights, IK constraint, physics constraint, 2 animation (`sway` lặp có bezier curve, `reach` di chuyển IK target), kèm ảnh và atlas.
-- `runtime-check.ts`: nạp skeleton bằng `@esotericsoftware/spine-core` 4.3.13 rồi kiểm tra:
-  - mọi attachment đều có ảnh;
-  - mọi bone giữ giá trị hữu hạn khi chạy animation có physics;
-  - điểm nối vòng lặp không bị giật;
-  - IK chạm target.
-- `spine-roundtrip.ps1` (Windows) / `spine-roundtrip.sh` (macOS): gọi Spine CLI trên máy bạn để import JSON thành `.spine`, export lại JSON, rồi chạy `runtime-check` trên bản export.
+- `fixtures/swing/`: a hand-written sample skeleton in the 4.3 JSON format. 7 bones, 4 slots, a region and a weighted mesh, an IK constraint, a physics constraint, 2 animations (`sway`, looping with bezier curves; `reach`, moving the IK target), plus images and an atlas.
+- `runtime-check.ts`: loads the skeleton with `@esotericsoftware/spine-core` 4.3.13 and checks that:
+  - every attachment has an image;
+  - every bone stays finite while animations with physics play;
+  - the loop seam does not pop;
+  - IK reaches its target.
+- `spine-roundtrip.ps1` (Windows) / `spine-roundtrip.sh` (macOS): call the Spine CLI on your machine to import the JSON into a `.spine`, export JSON again, then run `runtime-check` on the export.
 
-## Chạy
+## Running
 
-Cần Node 20+.
+Requires Node 20+.
 
 ```bash
 npm install
 npm run spike:check
 ```
 
-Vòng Spine CLI (trên máy đã cài và kích hoạt Spine; script không đọc license key):
+Spine CLI round trip (on a machine with Spine installed and activated; the script does not read the license key):
 
 ```powershell
-$env:SPINE_VERSION = "4.3.xx"   # số phiên bản trong Help > About
+$env:SPINE_VERSION = "4.3.xx"   # version number from Help > About
 .\spike\spine-roundtrip.ps1
 ```
 
@@ -32,11 +32,11 @@ $env:SPINE_VERSION = "4.3.xx"   # số phiên bản trong Help > About
 SPINE_VERSION=4.3.xx ./spike/spine-roundtrip.sh
 ```
 
-Nếu Spine không nằm ở đường dẫn mặc định, đặt thêm `SPINE_EXE`. Nếu CLI báo sai tham số, chạy `Spine --help` rồi gửi lại phần output (không chứa thông tin license).
+If Spine is not at the default path, also set `SPINE_EXE`. If the CLI reports bad arguments, run `Spine --help` and send back the output (it contains no license information).
 
-## Kết quả đến nay
+## Results so far
 
-- ✅ JSON viết tay nạp được bằng runtime 4.3.13. Các kiểm tra phát hiện đúng lỗi cố ý gây ra: thiếu ảnh, vòng lặp bị giật, IK không chạm target.
-- ⚠️ Định dạng 4.3 khác 4.2: IK, transform, path, physics và slider constraint nằm chung trong mảng `constraints` và phân biệt bằng `type`, thay vì nằm trong các mảng `ik`, `transform`, `path`, `physics` riêng. API runtime cũng đổi (`setupPose()`, `appliedPose`, `Physics`).
-- ⚠️ Runtime cần atlas thật kể cả khi chạy headless, nên khâu đóng gói atlas phải có từ giai đoạn 1–2.
-- ⏳ Chưa xác nhận: tham số Spine CLI và việc mở `.spine` trong Editor. Cần chạy trên máy của bạn.
+- ✅ The hand-written JSON loads in runtime 4.3.13. The checks catch deliberately introduced errors: missing images, a popping loop, IK not reaching its target.
+- ⚠️ The 4.3 format differs from 4.2: IK, transform, path, physics and slider constraints share one `constraints` array, told apart by `type`, instead of separate `ik`, `transform`, `path`, `physics` arrays. The runtime API changed too (`setupPose()`, `appliedPose`, `Physics`).
+- ⚠️ The runtime needs a real atlas even headless, so atlas packing must exist from phase 1–2.
+- ⏳ Not yet confirmed: Spine CLI arguments and opening the `.spine` in the Editor. Needs a run on your machine.

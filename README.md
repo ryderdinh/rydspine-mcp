@@ -1,66 +1,66 @@
 # rydspine-mcp
 
-MCP server dựng rig và animation Spine 4.3 từ yêu cầu bằng ngôn ngữ tự nhiên. Không cần cài Spine Editor: server tạo trực tiếp dữ liệu Spine và kiểm tra bằng runtime Spine 4.3 chính hãng.
+An MCP server that builds Spine 4.3 rigs and animations from natural-language requests. No Spine Editor install is needed: the server writes Spine data directly and checks it with the official Spine 4.3 runtime.
 
-- Tiến độ: [`PROGRESS.md`](PROGRESS.md)
-- Kế hoạch: [`PLAN.md`](PLAN.md)
-- Yêu cầu: [`REQUIREMENTS.md`](REQUIREMENTS.md)
+- Progress: [`PROGRESS.md`](PROGRESS.md)
+- Plan: [`PLAN.md`](PLAN.md)
+- Requirements: [`REQUIREMENTS.md`](REQUIREMENTS.md)
 
-## Cài đặt
+## Installation
 
-**Người dùng:** mở trang [`docs/index.html`](docs/index.html) (GitHub Pages), tải bộ cài cho macOS hoặc Windows và bấm đúp. Bộ cài tải mã nguồn vào `~/.rydspine/app` rồi chạy trình cài đặt `src/setup.ts`, trình này ghi cấu hình MCP cho Claude Code, Claude Desktop và Codex. Chạy lại để cập nhật. Đóng gói lại bộ cài sau khi sửa `installer/`: `npm run installers`.
+**Users:** open the [`docs/index.html`](docs/index.html) page (GitHub Pages), download the installer for macOS or Windows and double-click it. The installer downloads the source into `~/.rydspine/app` and runs the setup program `src/setup.ts`, which writes the MCP configuration for Claude Code, Claude Desktop and Codex. Run it again to update. Repackage the installers after editing `installer/`: `npm run installers`.
 
-**Phát triển:** cần Node 20+.
+**Development:** requires Node 20+.
 
 ```bash
 npm install
-npx playwright install chromium   # cho ảnh preview PNG và test trang player
+npx playwright install chromium   # for PNG previews and the player page tests
 npm test
 ```
 
-## Dùng với Claude Code
+## Using with Claude Code
 
-Repo có sẵn `.mcp.json`, nên Claude Code mở trong thư mục này sẽ tự nhận server `rydspine`. Với client MCP khác, chạy server qua stdio:
+The repo ships a `.mcp.json`, so Claude Code opened in this folder picks up the `rydspine` server automatically. For other MCP clients, run the server over stdio:
 
 ```bash
 npx tsx src/index.ts
 ```
 
-Dự án được lưu trong `workspaces/` (đổi bằng biến `RYDSPINE_WORKSPACES`); thư mục này không commit lên git.
+Projects are stored in `workspaces/` (change it with the `RYDSPINE_WORKSPACES` variable); this folder is not committed to git.
 
-## Quy trình
+## Workflow
 
-1. `project_create`: tạo dự án; hoặc `project_import` để mở project Spine 4.3 có sẵn (JSON hoặc `.skel`).
-2. `psd_import` hoặc `image_import`: đưa các bộ phận vào, mỗi phần nằm đúng vị trí của nó. Trong PSD, layer `<tên>[pivot]` (một chấm nhỏ, ẩn cũng được) đặt xương cho layer hoặc nhóm `<tên>` nằm cạnh nó; `[pivot]` nằm trong một nhóm là xương của nhóm đó. Xương lồng nhau theo nhóm, và mỗi bộ phận gắn vào xương gần nhất.
-   Ảnh phẳng (một hình, chưa tách lớp): `image_inspect` trả ảnh có lưới toạ độ; `image_split` tự tách các mảng rời trên nền trong suốt hoặc nền một màu, hoặc cắt theo polygon cho từng bộ phận (liệt kê từ sau ra trước). `overlap` vẽ bù phần bị bộ phận phía trước che, chỉ trong polygon của bộ phận đó, nên hãy khoanh cả phần bị che (cổ dưới đầu, đầu đùi dưới áo) để khớp không hở khi xoay. `dryRun` chỉ trả ảnh overlay để chỉnh polygon. Với nền trắng hoặc nền một màu, viền khử răng cưa được tách khỏi màu nền (`matte`), nên bộ phận không còn quầng sáng khi đặt lên nền khác.
-3. `rig_template` (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân) hoặc `bone_add` (`space: "world"`): đặt xương tại các khớp trên hình.
-4. `slot_update`: gắn bộ phận vào xương; hình giữ nguyên vị trí.
-5. `mesh_generate` (mặc định bám theo viền ảnh; gọi lại để dựng lại mesh; `smooth` cho giấy, vải uốn mượt không rách), `constraint_add`: thêm phần uốn cong, IK, transform, physics, path (đưa các điểm trên hình, rydspine tự tạo đường cong; `pathBones` gắn đường cong vào vài xương điều khiển) và slider (phát animation theo một xương điều khiển). `shape_add`: điểm mốc cho game (`point`: nòng súng, tay cầm), vùng va chạm (`boundingbox`) hoặc mặt nạ (`clipping`), từ các điểm trên hình hoặc tự dò theo viền của một slot (`around`).
-6. `mirror_bones`: chép một bên rig sang bên kia (xương, slot, ảnh lật, IK, physics). `mirror_animation`: đổi animation sang bên kia (`swap` cho nhìn ngang, `mirror` phản chiếu cho nhìn thẳng).
-6. `skin_create` / `skin_variant` nếu cần nhiều bộ trang phục.
-7. `anim_create`, rồi `anim_oscillate` / `anim_tween` / `anim_bounce` / `anim_gait` / `anim_set_keys` / `anim_slot_keys`. Constraint thay đổi theo thời gian (vị trí trên path, gió physics, mix, time của slider): `anim_constraint_keys`. Hiệu ứng nhiều frame (lửa, lấp lánh): `sequence_import` rồi `anim_sequence_keys`. Event cho game (bước chân, va chạm, âm thanh): `event_define` và `anim_event_keys`. Đổi lớp trước/sau giữa animation: `anim_draw_order_keys`. Đổi hình mesh theo thời gian (vệt sáng kéo dài, cờ phồng, khối bẹp): `anim_deform_keys`. `property: "scale"` key cả hai trục scale một lần. Mọi `ease` nhận preset hoặc bezier kiểu CSS `[x1, y1, x2, y2]`.
-8. `validate`, `motion_check` → `preview` → `export`.
+1. `project_create`: create a project; or `project_import` to open an existing Spine 4.3 project (JSON or `.skel`).
+2. `psd_import` or `image_import`: bring in the parts, each at its own position. In a PSD, a layer `<name>[pivot]` (a small dot, may be hidden) places the bone for the layer or group `<name>` next to it; a `[pivot]` inside a group is that group's bone. Bones nest like the groups, and each part is bound to the nearest bone.
+   Flat picture (one image, not split into layers): `image_inspect` returns the image with a coordinate grid; `image_split` splits the separate islands on a transparent or single-color background automatically, or cuts one polygon per part (listed back to front). `overlap` paints in the area hidden by the part in front, only inside that part's polygon, so outline the hidden piece too (neck under the head, thighs under the shirt) so joints show no gap when they turn. `dryRun` only returns the overlay for adjusting polygons. On a white or single-color background the anti-aliased rim is unmixed from the background color (`matte`), so parts show no light halo over other backdrops.
+3. `rig_template` (chain/wing, hinge, wheel, IK limb, biped, quadruped) or `bone_add` (`space: "world"`): place bones at the joints in the art.
+4. `slot_update`: bind parts to bones; the art stays in place.
+5. `mesh_generate` (follows the image outline by default; call again to rebuild the mesh; `smooth` lets paper and cloth bend smoothly without tearing), `constraint_add`: add bending, IK, transform, physics, path (give points on the art and rydspine builds the curve; `pathBones` weights the curve to a few control bones) and slider (plays an animation by a control bone). `shape_add`: game anchor points (`point`: gun muzzle, hand grip), hit areas (`boundingbox`) or masks (`clipping`), from points on the art or traced around a slot's outline (`around`).
+6. `mirror_bones`: copy one side of the rig to the other (bones, slots, flipped images, IK, physics). `mirror_animation`: move an animation to the other side (`swap` for side views, `mirror` reflects for front views).
+7. `skin_create` / `skin_variant` when several outfits are needed.
+8. `anim_create`, then `anim_oscillate` / `anim_tween` / `anim_bounce` / `anim_gait` / `anim_set_keys` / `anim_slot_keys`. Constraints that change over time (position on a path, physics wind, mix, slider time): `anim_constraint_keys`. Multi-frame effects (fire, sparkles): `sequence_import` then `anim_sequence_keys`. Game events (footsteps, hits, sounds): `event_define` and `anim_event_keys`. Front/back layer swaps during an animation: `anim_draw_order_keys`. Mesh shapes over time (a stretching glow, a billowing flag, a squashing blob): `anim_deform_keys`. `property: "scale"` keys both scale axes at once. Every `ease` takes a preset or a CSS-style bezier `[x1, y1, x2, y2]`.
+9. `validate`, `motion_check` → `preview` → `export`.
 
-## Giao diện
+## Interface
 
-Chạy `npm run ui` (hoặc gọi tool `ui_open`) rồi mở http://127.0.0.1:5180. Trang **rydspine studio** phát animation của mọi dự án bằng player Spine, và hiện kết quả kiểm tra, cây xương, lịch sử phiên bản cùng dải khung hình.
+Run `npm run ui` (or call the `ui_open` tool) and open http://127.0.0.1:5180. The **rydspine studio** page plays every project's animations with the Spine player, and shows check results, the bone tree, version history and a frame strip.
 
-## Bộ nghiệm thu
+## Acceptance suite
 
-Chạy `npm run acceptance` để dựng 8 asset mẫu (nhân vật, rồng, cây, rương, xe, logo, đèn lồng, cua) qua tool MCP. Kết quả nằm trong `acceptance/out/`: file xuất cho từng asset, `report.json` và trang `studio-local.html`.
+Run `npm run acceptance` to build 8 sample assets (character, dragon, tree, chest, car, logo, lantern, crab) through the MCP tools. Results land in `acceptance/out/`: exported files for each asset, `report.json` and the `studio-local.html` page.
 
-Chạy `npm run real:art` để nghiệm thu trên art thật: con rồng trong bộ ví dụ của Spine (art của Thiago Brayner, chỉ dùng để trình diễn). Script dựng PSD giống file họa sĩ giao (layer phẳng, marker `[pivot]`), rig và làm animation bay hoàn toàn qua tool MCP, rồi so tư thế setup với bản gốc theo từng điểm ảnh. Có `SPINE_CLI` thì kiểm thêm vòng qua Spine Editor. Art chỉ nằm trong `~/.cache` và `acceptance/out/`, không commit hay đăng lên đâu.
+Run `npm run real:art` for acceptance on real art: the dragon from Spine's example set (art by Thiago Brayner, for demonstration only). The script builds a PSD like one an artist would deliver (flat layers, `[pivot]` markers), rigs it and makes a flying animation entirely through the MCP tools, then compares the setup pose with the original pixel by pixel. With `SPINE_CLI` set it also round-trips through the Spine Editor. The art stays in `~/.cache` and `acceptance/out/` and is never committed or published.
 
-Chạy `npm run spine:check` để kiểm 8 asset bằng Spine Editor thật: Spine import từng file JSON, xuất lại, rồi runtime so hai bản từng khung; Spine cũng vẽ dải khung hình cho mỗi animation. Cần đặt `SPINE_CLI` trỏ tới Spine (ví dụ `/Applications/Spine.app/Contents/MacOS/Spine`), hoặc trên Linux đặt `SPINE_ACTIVATION_CODE` để script tự tải Spine. Thiếu cả hai thì bỏ qua.
+Run `npm run spine:check` to check the 8 assets with the real Spine Editor: Spine imports each JSON file and exports it again, then the runtime compares both versions frame by frame; Spine also renders a frame strip for each animation. Set `SPINE_CLI` to point at Spine (for example `/Applications/Spine.app/Contents/MacOS/Spine`), or on Linux set `SPINE_ACTIVATION_CODE` so the script downloads Spine itself. Without either, the check is skipped.
 
-Chạy `npm run skel:examples` để kiểm phần đọc `.skel` trên bộ ví dụ chính thức của Spine (tải thưa từ `github.com/EsotericSoftware/spine-runtimes`, nhánh 4.3): mỗi file được chuyển sang JSON rồi so với runtime đọc thẳng `.skel`, từng khung. `npx tsx acceptance/skel-fixture.ts` tạo lại `test/fixtures/features` bằng Spine thật.
+Run `npm run skel:examples` to check `.skel` reading on Spine's official examples (sparse download from `github.com/EsotericSoftware/spine-runtimes`, branch 4.3): each file is converted to JSON and compared, frame by frame, with the runtime reading the `.skel` directly. `npx tsx acceptance/skel-fixture.ts` regenerates `test/fixtures/features` with the real Spine.
 
-Skill `.claude/skills/spine-rigging` hướng dẫn agent rig theo cách các dự án ví dụ của Spine làm (cách chọn constraint, thông số physics điển hình). Claude Code tự nạp khi mở repo này; muốn dùng ở nơi khác thì chép thư mục đó vào `~/.claude/skills/`.
+The `.claude/skills/spine-rigging` skill teaches agents to rig the way Spine's example projects do (choosing constraints, typical physics settings). Claude Code loads it automatically when this repo is open; to use it elsewhere, copy the folder into `~/.claude/skills/`.
 
-Mỗi thao tác lưu thành một phiên bản: `history_list` để xem, `history_diff` để so sánh, `history_revert` để quay lại, `lock_set` để khóa phần đã duyệt. Sau khi sửa trong Spine Editor và export lại JSON, dùng `project_sync` để đưa bản sửa về thành phiên bản mới.
+Every operation is saved as a version: `history_list` to view, `history_diff` to compare, `history_revert` to go back, `lock_set` to lock approved parts. After editing in the Spine Editor and exporting JSON again, use `project_sync` to bring the edit back as a new version.
 
-**Đầu ra của `export`:** `<tên>.json`, `<tên>.atlas`, `<tên>.png` dùng cho runtime Spine 4.3, và `<tên>.html` để xem animation trên trình duyệt. Người có Spine mở file JSON bằng **File → Import Data** để có project `.spine`.
+**`export` output:** `<name>.json`, `<name>.atlas`, `<name>.png` for the Spine 4.3 runtimes, and `<name>.html` to view the animations in a browser. Anyone with Spine opens the JSON file with **File → Import Data** to get a `.spine` project.
 
-**Quy ước tọa độ:** trục y hướng lên, đơn vị pixel, góc tính bằng độ ngược chiều kim đồng hồ. Giá trị animation là độ lệch so với setup pose; riêng `scalex`/`scaley` là hệ số nhân.
+**Coordinate conventions:** y points up, units are pixels, angles are degrees counter-clockwise. Animation values are offsets from the setup pose; only `scalex`/`scaley` are multipliers.
 
-Các dự án tham khảo (runtime chính thức, MCP Spine của cộng đồng): `REFERENCES.md`.
+Reference projects (official runtimes, community Spine MCPs): `REFERENCES.md`.

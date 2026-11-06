@@ -1,11 +1,11 @@
-# Ghi chú làm việc cho Claude
+# Working notes for Claude
 
-- **Nhắc người dùng khi nên compact.** Khi cuộc trò chuyện đã dài (nhiều lượt dùng tool, nhiều output lớn) và đang ở điểm dừng hợp lý (xong một phần việc, đã commit và push, cập nhật `PROGRESS.md`), nhắn: "Nên compact bây giờ", kèm lý do và việc sẽ làm tiếp. Không đợi tới lúc bị compact tự động giữa chừng một việc.
-- **Báo người dùng khi context đã bị compact.** Ngay khi thấy cuộc trò chuyện vừa được tóm tắt (compact), câu đầu tiên của tin nhắn tiếp theo phải nói rõ: "Context vừa được compact", kèm việc đang làm dở. Không làm tiếp im lặng.
-- Tiến độ và việc tiếp theo nằm trong `PROGRESS.md`; cập nhật file này sau mỗi phần việc. Kế hoạch: `PLAN.md`. Yêu cầu: `REQUIREMENTS.md`.
-- Trả lời người dùng bằng tiếng Việt.
-- Chỉ commit và push khi xong một phần việc. Xong việc thì tự merge nhánh vào `main` (`--no-ff`, chạy test sau merge) và push, không cần hỏi; chỉ tạo PR khi người dùng yêu cầu.
-- `SPINE_ACTIVATION_CODE` chỉ được đọc từ biến môi trường: không in ra, không ghi vào code, git hay file kết quả. Che mã trong mọi output (`sed "s/$SPINE_ACTIVATION_CODE/<CODE>/g"`).
-- Kiểm tra bằng Spine Editor thật: `npm run spine:check` (cần mạng tới `*.esotericsoftware.com` và gói `x11-xserver-utils`).
-- Kiểm phần đọc `.skel` trên ví dụ chính thức của Spine: `npm run skel:examples`. Cách rig theo ví dụ của Spine: skill `.claude/skills/spine-rigging/SKILL.md` (cập nhật khi học thêm mẫu mới).
-- Dự án tham khảo (MCP Spine của cộng đồng, runtime chính thức): `REFERENCES.md`; ghi thêm khi tìm được nguồn mới.
+- **Tell the user when to compact.** When the conversation has grown long (many tool calls, large outputs) and is at a sensible stopping point (a piece of work done, committed and pushed, `PROGRESS.md` updated), say: "Nên compact bây giờ" ("Time to compact"), with the reason and what comes next. Do not wait for automatic compaction in the middle of a task.
+- **Tell the user when context has been compacted.** As soon as you see the conversation was just summarized (compacted), the first sentence of your next message must say: "Context vừa được compact" ("Context was just compacted"), along with the task in progress. Do not carry on silently.
+- Progress and next steps live in `PROGRESS.md`; update it after each piece of work. Plan: `PLAN.md`. Requirements: `REQUIREMENTS.md`.
+- Reply to the user in Vietnamese.
+- Commit and push only when a piece of work is done. When done, merge the branch into `main` yourself (`--no-ff`, run the tests after the merge) and push, without asking; create a PR only when the user asks.
+- `SPINE_ACTIVATION_CODE` is read only from the environment: never print it or write it into code, git or result files. Mask the code in all output (`sed "s/$SPINE_ACTIVATION_CODE/<CODE>/g"`).
+- Check with the real Spine Editor: `npm run spine:check` (needs network access to `*.esotericsoftware.com` and the `x11-xserver-utils` package).
+- Check `.skel` reading on Spine's official examples: `npm run skel:examples`. How to rig like Spine's examples: the skill `.claude/skills/spine-rigging/SKILL.md` (update it when you learn new patterns).
+- Reference projects (community Spine MCPs, official runtimes): `REFERENCES.md`; add new sources as you find them.

@@ -1,265 +1,265 @@
-# Tiến độ rydspine-mcp
+# rydspine-mcp progress
 
-Cập nhật file này sau mỗi phần việc. Kế hoạch chi tiết: `PLAN.md`. Yêu cầu: `REQUIREMENTS.md`.
+Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirements: `REQUIREMENTS.md`.
 
-## Tổng quan
+## Overview
 
-| Giai đoạn | Trạng thái | Ghi chú |
+| Phase | Status | Notes |
 |---|---|---|
-| 0. Spike & chốt | ✅ Xong (trừ Spine CLI) | Runtime 4.3 chạy headless. Bỏ Spine CLI khỏi v1 vì máy người dùng không được cài Spine |
-| 1. Lõi | ✅ Xong bản đầu | MCP server, workspace, lịch sử phiên bản, validate, export |
-| 2. Đầu vào | ✅ Xong bản đầu | Nhập bộ PNG, PSD (layer → bộ phận, layer `[pivot]` → xương), project Spine 4.3 có sẵn dạng JSON hoặc binary `.skel`, ảnh phẳng (`image_split`: tự tách mảng rời hoặc cắt theo polygon, vẽ bù phần bị che đơn giản) |
-| 3. Rig | ✅ Xong bản đầu | Bones, slots, mesh theo viền ảnh hoặc lưới + auto weights, IK/transform/physics, mẫu rig (chuỗi/cánh, bản lề, bánh xe, chi IK, 2 chân, 4 chân), skin (bộ trang phục, biến thể) |
-| 4. Animation | ✅ Xong bản đầu | oscillate (kèm follow-through), tween (kèm anticipation), bounce, chu kỳ đi/chạy, key tay, key cho slot (độ trong suốt, màu, đổi hình) |
-| 5. Kiểm tra & preview | ✅ Xong bản đầu | validate (kể cả mesh bị gập, ép dẹt, kéo giãn), kiểm tra trượt chân, preview nhiều khung, HTML player, giao diện **rydspine studio** |
-| 6. Chỉnh sửa | ✅ Xong bản đầu | Khóa, revert, sửa theo khoảng thời gian, so sánh phiên bản (`history_diff`), nhập lại JSON đã sửa trong Spine (`project_sync`) |
-| 7. Đầu ra & nghiệm thu | 🟡 Gần xong | Bộ 8 asset nghiệm thu (art tự vẽ) chạy tự động và đạt hết kiểm tra. Cả 8 asset đã qua vòng Spine Editor 4.3.26 thật (`npm run spine:check`), chạy được cả trên máy Mac của người dùng. Đã nghiệm thu trên art thật (rồng của Spine, `npm run real:art`); còn chờ art của người dùng |
+| 0. Spike & decisions | ✅ Done (except the Spine CLI) | The 4.3 runtime runs headless. The Spine CLI was dropped from v1 because Spine cannot be installed on the user's machine |
+| 1. Core | ✅ First version done | MCP server, workspace, version history, validate, export |
+| 2. Input | ✅ First version done | PNG sets, PSD (layer → part, `[pivot]` layer → bone), existing Spine 4.3 projects as JSON or binary `.skel`, flat pictures (`image_split`: separate islands automatically or cut by polygon, simple painting-in of hidden areas) |
+| 3. Rig | ✅ First version done | Bones, slots, meshes following the image outline or a grid + auto weights, IK/transform/physics, rig templates (chain/wing, hinge, wheel, IK limb, biped, quadruped), skins (outfits, variants) |
+| 4. Animation | ✅ First version done | oscillate (with follow-through), tween (with anticipation), bounce, walk/run cycles, hand keys, slot keys (alpha, color, image swap) |
+| 5. Checks & preview | ✅ First version done | validate (including folded, squashed and stretched meshes), foot-slide check, multi-frame preview, HTML player, **rydspine studio** interface |
+| 6. Editing | ✅ First version done | Locks, revert, edits by time range, version comparison (`history_diff`), re-importing JSON edited in Spine (`project_sync`) |
+| 7. Output & acceptance | 🟡 Nearly done | The 8-asset acceptance suite (self-drawn art) runs automatically and passes every check. All 8 assets have been through the real Spine Editor 4.3.26 (`npm run spine:check`), which also runs on the user's Mac. Accepted on real art (Spine's dragon, `npm run real:art`); still waiting for the user's own art |
 
-## Quyết định đã chốt
+## Settled decisions
 
-- Spine Professional; người dùng đã có Spine trên máy. MCP xuất JSON, atlas, PNG và HTML player. Người có Spine dùng File → Import Data để có file `.spine`.
-- Phiên bản Spine Editor của người dùng: **4.3.26** (file coin mẫu được xuất bằng 4.3.75-beta). JSON mới tạo ghi 4.3.26 để Spine không cảnh báo lệch phiên bản; đổi bằng biến `RYDSPINE_SPINE_VERSION`. Runtime npm 4.3.13 đọc được cả hai.
-- Stack: TypeScript/Node, `@modelcontextprotocol/sdk`, `@esotericsoftware/spine-core` và `spine-player` 4.3.13.
-- Bảo mật: không lưu license; asset và workspace nằm ngoài git (`.gitignore`).
+- Spine Professional; the user has Spine on their machine. The MCP exports JSON, atlas, PNG and an HTML player. Anyone with Spine uses File → Import Data to get a `.spine` file.
+- The user's Spine Editor version: **4.3.26** (the sample coin file was exported with 4.3.75-beta). Newly created JSON records 4.3.26 so Spine does not warn about a version mismatch; change it with the `RYDSPINE_SPINE_VERSION` variable. The npm runtime 4.3.13 reads both.
+- Stack: TypeScript/Node, `@modelcontextprotocol/sdk`, `@esotericsoftware/spine-core` and `spine-player` 4.3.13.
+- Security: no license is stored; assets and workspaces stay out of git (`.gitignore`).
 
-## Còn chờ người dùng
+## Waiting on the user
 
-- Runtime đích (web, Unity, Godot…).
-- Asset mẫu thật (được phép dùng) cho bộ nghiệm thu. Đã có: coin (mẫu chính thức của Spine). Người dùng không có PSD, nên tạm dùng art tự vẽ bằng code.
-- Kết quả phát animation của hero và dragon trong Spine Editor.
+- Target runtime (web, Unity, Godot…).
+- Real sample assets (cleared for use) for the acceptance suite. Available so far: coin (an official Spine sample). The user has no PSDs, so self-drawn art made in code is used for now.
+- Results of playing the hero and dragon animations in the Spine Editor.
 
-## Nhật ký
+## Log
 
 ### 2026-10-30
-- Viết `REQUIREMENTS.md` và `PLAN.md`; thêm mục bảo mật và `.gitignore`.
-- Spike giai đoạn 0 (`spike/`): skeleton 4.3 viết tay và script kiểm tra bằng runtime. Phát hiện JSON 4.3 gộp các constraint vào mảng `constraints`.
-- Lõi MCP (`src/`), 25 tool:
-  - dự án, nhập ảnh, xem ảnh;
-  - bone, slot, attachment (đặt theo tọa độ world, giữ nguyên vị trí khi gắn vào xương);
-  - mesh lưới + auto weights, constraint IK/transform/physics;
-  - animation: oscillate, tween, bounce, key tay;
-  - validate, preview, export, lịch sử, khóa.
-- Test end-to-end qua MCP client thật (`test/e2e.test.ts`, 8 test đạt). Test dựng một con vật nhỏ, tạo animation lặp và animation một lần, kiểm tra từ chối sửa sai, khóa, revert, và mở trang player bằng Chromium.
-- Lỗi đã sửa:
-  - đổi góc xoay cha–con bị sai, làm ảnh lệch khi gắn vào xương;
-  - mesh không hiện trong preview.
+- Wrote `REQUIREMENTS.md` and `PLAN.md`; added a security section and `.gitignore`.
+- Phase 0 spike (`spike/`): a hand-written 4.3 skeleton and a runtime check script. Found that 4.3 JSON merges constraints into a `constraints` array.
+- MCP core (`src/`), 25 tools:
+  - projects, image import, image view;
+  - bones, slots, attachments (placed in world coordinates, kept in place when bound to a bone);
+  - grid meshes + auto weights, IK/transform/physics constraints;
+  - animation: oscillate, tween, bounce, hand keys;
+  - validate, preview, export, history, locks.
+- End-to-end tests through a real MCP client (`test/e2e.test.ts`, 8 tests passing). The tests build a small creature, create a looping and a one-shot animation, check rejection of bad edits, locks, revert, and open the player page in Chromium.
+- Bugs fixed:
+  - wrong parent–child rotation conversion, which shifted images when bound to a bone;
+  - meshes not showing in previews.
 
-### 2026-10-30 (tiếp)
-- Nhận project mẫu coin từ người dùng (Spine 4.3.75-beta).
-- Thêm tool `project_import`:
-  - nhập project Spine 4.3 có sẵn, kèm thư mục ảnh hoặc atlas;
-  - khi chỉ có atlas, tự tách lại ảnh gốc, có xử lý xoay, cắt viền và màu premultiplied (PMA);
-  - từ chối file binary và JSON trước 4.3, kèm thông báo rõ ràng.
-- Ảnh được phép nằm trong thư mục con (`arm/upper`), giống cách Spine đặt tên.
-- Preview vẽ được clipping và độ trong suốt của slot.
-- Test với coin (11 test đạt):
-  - ảnh tách từ atlas trùng từng pixel với ảnh gốc;
-  - animation gốc chạy đúng và vòng lặp khớp;
-  - thêm animation `pop` bằng tool của MCP;
-  - xuất ra rồi nhập lại thì animation gốc giữ nguyên.
-- Fixture coin ở `test/fixtures/coin/` kèm `license.txt`. Ảnh của Esoteric Software chỉ dùng phi thương mại.
+### 2026-10-30 (cont.)
+- Received the coin sample project from the user (Spine 4.3.75-beta).
+- Added the `project_import` tool:
+  - imports an existing Spine 4.3 project, with an image folder or an atlas;
+  - with only an atlas, unpacks the original images, handling rotation, whitespace trimming and premultiplied alpha (PMA);
+  - rejects binary files and pre-4.3 JSON with a clear message.
+- Images may live in subfolders (`arm/upper`), as Spine names them.
+- Previews draw clipping and slot alpha.
+- Tests with coin (11 tests passing):
+  - images unpacked from the atlas match the originals pixel for pixel;
+  - the original animations play correctly and loop seamlessly;
+  - a `pop` animation added with the MCP tools;
+  - export then re-import keeps the original animations unchanged.
+- Coin fixture in `test/fixtures/coin/` with `license.txt`. Esoteric Software's images are for non-commercial use only.
 
-### 2026-10-30 (tiếp 2)
+### 2026-10-30 (cont. 2)
 - `psd_import`:
-  - mỗi layer có pixel thành một bộ phận, giữ vị trí, thứ tự, độ trong suốt và chế độ hòa trộn;
-  - layer ẩn được bỏ qua (hoặc nhập vào nhưng ẩn đi), tên layer trùng tự đánh số;
-  - đọc file 2 lượt để từ chối PSD hoặc layer quá lớn trước khi giải mã, giới hạn bộ nhớ 1 GB.
-- `mesh_generate` mặc định tạo mesh theo viền ảnh:
-  - dò viền alpha, rút gọn, nới viền 2px;
-  - thêm đỉnh bên trong, tam giác hóa Delaunay có ràng buộc để mọi tam giác nằm trong viền;
-  - test trên ảnh coin: mesh phủ trên 99,5% điểm ảnh đặc mà vẫn ôm sát.
-- `rig_template`: chuỗi đốt (kèm mesh và physics), bản lề, bánh xe, chi 2 đốt có IK, nhân vật 2 chân.
-- Lỗi test bắt được và đã sửa: IK gập ngược chiều so với hình vẽ. Giờ gối và khuỷu tay giữ đúng vị trí đã vẽ.
-- Test: 20 test đạt (e2e, mesh theo viền, mẫu rig).
+  - every layer with pixels becomes a part, keeping position, order, opacity and blend mode;
+  - hidden layers are skipped (or imported but hidden), duplicate layer names are numbered;
+  - reads the file in 2 passes to reject oversized PSDs or layers before decoding, with a 1 GB memory limit.
+- `mesh_generate` creates meshes following the image outline by default:
+  - traces the alpha outline, simplifies it, pads it by 2 px;
+  - adds interior vertices, constrained Delaunay triangulation so every triangle lies inside the outline;
+  - tested on the coin images: meshes cover over 99.5% of solid pixels while staying tight.
+- `rig_template`: segmented chain (with mesh and physics), hinge, wheel, two-segment IK limb, biped character.
+- A bug caught by tests and fixed: IK bent the opposite way to the drawing. Knees and elbows now keep their drawn positions.
+- Tests: 20 passing (e2e, outline meshes, rig templates).
 
-### 2026-10-30 (tiếp 3)
-- Thêm tool:
-  - `anim_slot_keys`: độ trong suốt, màu, đổi hình;
-  - `anim_gait`: chu kỳ đi/chạy tại chỗ, báo tốc độ di chuyển khớp với bước chân;
-  - `motion_check`: phát hiện chân trượt khi đang chạm đất;
-  - `ui_open`: mở giao diện studio.
-- Bộ nghiệm thu `acceptance/` (`npm run acceptance`): dựng 6 asset hoàn toàn qua tool MCP, kiểm tra, preview và xuất file. Có trong test tự động.
-  - Nhân vật chạy → dừng → vung kiếm: không trượt chân, cả khi chạy lẫn khi dừng.
-  - Rồng vỗ cánh, cổ và đuôi trễ pha theo.
-  - Cây trong gió, mỗi nhánh một nhịp.
-  - Rương nảy lên, mở nắp có nảy, ánh sáng hiện dần.
-  - Xe lăn bánh (144,5 px/s), thân nhún.
-  - Logo bật ra, nảy, ổn định, có tia lấp lánh.
-- Lỗi đã sửa: preview của animation không lặp quay về khung đầu ở thời điểm kết thúc (logo biến mất ở khung cuối).
-- Giao diện **rydspine studio** (`npm run ui` hoặc tool `ui_open`):
-  - phát animation bằng player Spine chính hãng;
-  - xem yêu cầu, kết quả kiểm tra, cây xương, lịch sử phiên bản và dải khung hình;
-  - chạy được trên máy tính và điện thoại, nền sáng và nền tối.
-  - Bản studio của 6 asset đã đăng làm trang web riêng tư.
-- Test: 23 test đạt.
+### 2026-10-30 (cont. 3)
+- New tools:
+  - `anim_slot_keys`: alpha, color, image swap;
+  - `anim_gait`: walk/run cycles in place, reporting the travel speed that matches the steps;
+  - `motion_check`: detects feet sliding while on the ground;
+  - `ui_open`: opens the studio interface.
+- The `acceptance/` suite (`npm run acceptance`): builds 6 assets entirely through the MCP tools, checks, previews and exports them. Part of the automated tests.
+  - Character runs → stops → swings a sword: no foot sliding, both running and stopping.
+  - Dragon flaps its wings, neck and tail following out of phase.
+  - Tree in the wind, each branch with its own rhythm.
+  - Chest hops, the lid opens with a bounce, a glow fades in.
+  - Car rolls its wheels (144.5 px/s), the body bobs.
+  - Logo pops out, bounces, settles, with sparkles.
+- Bug fixed: previews of non-looping animations jumped back to the first frame at the end time (the logo vanished on the last frame).
+- The **rydspine studio** interface (`npm run ui` or the `ui_open` tool):
+  - plays animations with the official Spine player;
+  - shows the request, check results, bone tree, version history and frame strip;
+  - works on desktop and phone, light and dark themes.
+  - The studio for the 6 assets was published as a private web page.
+- Tests: 23 passing.
 
 ### 2026-10-31
-- Đã merge đợt trước vào `main` ([ryderdinh/rydspine-mcp#1](https://github.com/ryderdinh/rydspine-mcp/pull/1)); làm tiếp trên nhánh mới tách từ `main`.
-- Đã kiểm tra vùng sáng của rương trong player: không phải lỗi. Màu đạt vàng sáng ở đỉnh; ảnh chụp trước chỉ rơi vào lúc đang mờ dần.
-- `validate` phát hiện mesh biến dạng khi chạy animation:
-  - tam giác bị lật là lỗi; bị ép dưới 15% hoặc giãn quá 6 lần là cảnh báo;
-  - so với mức thay đổi trung vị của cả mesh, nên lật gương, phóng to đều hay bật ra từ 0 không bị báo nhầm;
-  - phát hiện thêm: physics có thể quất đuôi đến mức gập mesh khi cả nhân vật phóng to quá nhanh.
-- `history_diff`: liệt kê khác biệt giữa hai phiên bản (xương, slot, constraint, attachment, từng timeline, vòng lặp, khóa).
-- `project_sync`: nhập lại JSON đã sửa trong Spine Editor thành phiên bản mới, có báo khác biệt, giữ cờ lặp, báo nếu bản sửa đụng vào phần đã khóa; quay lại được.
-- Mẫu rig 4 chân (`rig_template` kind `quadruped`): thân, cổ, đầu, 4 chân IK, đuôi tùy chọn. Đi 4 nhịp bằng `anim_gait`, không trượt chân. Cánh dùng mẫu chuỗi đốt.
-- Test: 27 test đạt.
+- Merged the previous batch into `main` ([ryderdinh/rydspine-mcp#1](https://github.com/ryderdinh/rydspine-mcp/pull/1)); continuing on a new branch off `main`.
+- Checked the chest's glow in the player: not a bug. The color reaches bright yellow at its peak; the earlier screenshot just caught it while fading.
+- `validate` detects mesh deformation while animations play:
+  - flipped triangles are errors; squashed below 15% or stretched over 6× are warnings;
+  - measured against the median change of the whole mesh, so mirroring, uniform scaling or popping out from 0 are not falsely flagged;
+  - also found: physics can whip a tail hard enough to fold its mesh when the whole character scales up too fast.
+- `history_diff`: lists the differences between two versions (bones, slots, constraints, attachments, each timeline, loops, locks).
+- `project_sync`: re-imports JSON edited in the Spine Editor as a new version, reporting differences, keeping loop flags, warning if the edit touches locked parts; can be reverted.
+- Quadruped rig template (`rig_template` kind `quadruped`): body, neck, head, 4 IK legs, optional tail. Walks a 4-beat gait with `anim_gait` without foot sliding. Wings use the chain template.
+- Tests: 27 passing.
 
-### 2026-10-31 (tiếp)
-- Đã merge đợt trước ([ryderdinh/rydspine-mcp#2](https://github.com/ryderdinh/rydspine-mcp/pull/2)).
-- `project_import` đọc được file binary `.skel`:
-  - dùng bộ đọc của runtime Spine rồi chuyển dữ liệu ngược lại thành JSON 4.3;
-  - đường cong được khôi phục chính xác từ các điểm lấy mẫu của runtime;
-  - test: file `coin-pro.skel` chuyển ra JSON chạy y hệt `coin-pro.json` ở mọi khung;
-  - chưa hỗ trợ transform/path/slider constraint và chuỗi ảnh (image sequence); gặp thì báo rõ.
-- Skin (`skin_create`, `skin_variant`, `skin_remove`):
-  - mỗi skin thay hình cho từng slot, giữ đúng vị trí hình gốc;
-  - phần dùng mesh thành linked mesh, uốn cong y như bản gốc;
-  - từ chối ảnh sai tỉ lệ; `preview` chọn được skin.
-- Test: 30 test đạt.
+### 2026-10-31 (cont.)
+- Merged the previous batch ([ryderdinh/rydspine-mcp#2](https://github.com/ryderdinh/rydspine-mcp/pull/2)).
+- `project_import` reads binary `.skel` files:
+  - uses the Spine runtime's reader, then converts the data back into 4.3 JSON;
+  - curves are recovered exactly from the runtime's sample points;
+  - test: `coin-pro.skel` converted to JSON plays identically to `coin-pro.json` on every frame;
+  - transform/path/slider constraints and image sequences not yet supported; reported clearly when found.
+- Skins (`skin_create`, `skin_variant`, `skin_remove`):
+  - each skin swaps the image of individual slots, keeping the original image position;
+  - mesh parts become linked meshes that bend exactly like the original;
+  - images with the wrong aspect ratio are rejected; `preview` can pick a skin.
+- Tests: 30 passing.
 
-### 2026-10-31 (tiếp 2)
-- Đã merge đợt trước ([ryderdinh/rydspine-mcp#3](https://github.com/ryderdinh/rydspine-mcp/pull/3)).
-- `export` kèm thư mục `images/` cạnh file JSON, để Spine Editor (Import Data) tìm thấy hình.
-- Người dùng import `hero.json` vào Spine Editor 4.3.26: thành công, hình và xương đúng chỗ. Chỉ có cảnh báo lệch phiên bản (file ghi 4.3.75-beta) → đổi phiên bản mặc định thành 4.3.26.
-- Test: 30 test đạt.
+### 2026-10-31 (cont. 2)
+- Merged the previous batch ([ryderdinh/rydspine-mcp#3](https://github.com/ryderdinh/rydspine-mcp/pull/3)).
+- `export` includes an `images/` folder next to the JSON file, so the Spine Editor (Import Data) finds the images.
+- The user imported `hero.json` into Spine Editor 4.3.26: success, images and bones in place. Only a version mismatch warning (the file said 4.3.75-beta) → default version changed to 4.3.26.
+- Tests: 30 passing.
 
-### 2026-10-31 (tiếp 3)
-- Đã merge đợt trước ([ryderdinh/rydspine-mcp#4](https://github.com/ryderdinh/rydspine-mcp/pull/4), [ryderdinh/rydspine-mcp#5](https://github.com/ryderdinh/rydspine-mcp/pull/5)).
-- Chạy Spine Editor 4.3.26 Professional thật trên cloud:
-  - launcher tải từ trang license của người dùng, kích hoạt bằng `SPINE_ACTIVATION_CODE`; mã không bị in ra và không nằm trong file nào của repo hay kết quả;
-  - cần mở mạng cho `*.esotericsoftware.com` (máy chủ API kích hoạt và tải editor), cài `x11-xserver-utils` (libxrandr) để Spine vẽ ảnh dưới Xvfb.
+### 2026-10-31 (cont. 3)
+- Merged the previous batch ([ryderdinh/rydspine-mcp#4](https://github.com/ryderdinh/rydspine-mcp/pull/4), [ryderdinh/rydspine-mcp#5](https://github.com/ryderdinh/rydspine-mcp/pull/5)).
+- Ran the real Spine Editor 4.3.26 Professional in the cloud:
+  - the launcher is downloaded from the user's license page and activated with `SPINE_ACTIVATION_CODE`; the code is never printed and is in no file of the repo or results;
+  - needs network access to `*.esotericsoftware.com` (activation API and editor download servers), and `x11-xserver-utils` (libxrandr) installed so Spine can render under Xvfb.
 - `npm run spine:check` (`acceptance/spine-check.ts`):
-  - dựng 6 asset, cho Spine import JSON thành `.spine` rồi xuất lại JSON (kèm nonessential);
-  - runtime phát cả hai bản từng khung, kể cả physics, so mọi xương, màu slot và đỉnh attachment;
-  - Spine xuất chuỗi PNG từng animation, ghép thành dải 8 khung;
-  - dùng `SPINE_CLI` nếu có; nếu không, trên Linux có `SPINE_ACTIVATION_CODE` thì tự tải launcher vào `~/.cache/rydspine/spine`; thiếu cả hai thì bỏ qua.
-- Lỗi chỉ Spine Editor phát hiện (runtime chấp nhận), đã sửa:
-  - **mesh có trọng số không import được** ("Index -2 out of bounds", dragon và tree): mỗi đỉnh phải liệt kê xương theo thứ tự của skeleton; trước đây xếp theo trọng số;
-  - **cảnh báo thiếu nonessential** khi import: mesh giờ ghi `edges` (viền);
-  - **hero lệch IK sau khi qua Spine**: Spine bắt thời điểm key gần khung hình về đúng khung (0.033 → 1/30). Giờ rydspine ghi luôn thời điểm đúng khung khi lệch dưới 2 ms.
-- Kết quả: cả 6 asset đạt, lệch tối đa 0,0011 px; dải hình do Spine vẽ đúng ý đồ.
-- Test nghiệm thu kiểm thêm 3 quy tắc trên (test hỏng nếu bỏ phần sửa). Test: 30 test đạt.
+  - builds the 6 assets, has Spine import the JSON into `.spine` and export JSON again (with nonessential data);
+  - the runtime plays both versions frame by frame, physics included, comparing every bone, slot color and attachment vertex;
+  - Spine exports a PNG sequence of each animation, assembled into an 8-frame strip;
+  - uses `SPINE_CLI` if set; otherwise, on Linux with `SPINE_ACTIVATION_CODE`, downloads the launcher into `~/.cache/rydspine/spine`; without either, skipped.
+- Bugs only the Spine Editor caught (the runtime accepted them), fixed:
+  - **weighted meshes failed to import** ("Index -2 out of bounds", dragon and tree): each vertex must list its bones in skeleton order; they used to be sorted by weight;
+  - **missing nonessential data warning** on import: meshes now write `edges`;
+  - **hero's IK drifted after going through Spine**: Spine snaps key times near a frame onto the frame (0.033 → 1/30). rydspine now writes the exact frame time when off by less than 2 ms.
+- Result: all 6 assets pass, max deviation 0.0011 px; the strips Spine renders match the intent.
+- The acceptance tests also check the 3 rules above (they fail if the fixes are removed). Tests: 30 passing.
 
-### 2026-10-31 (tiếp 4)
-- `.skel` giờ đọc được transform, path và slider constraint, chuỗi ảnh (region và mesh), cùng các timeline của chúng; linked mesh lấy nguồn từ slot khác ghi thêm `slot`.
-- Kiểm bằng bộ ví dụ chính thức (`github.com/EsotericSoftware/spine-runtimes`, nhánh 4.3, 44 file `.skel`). Script mới `npm run skel:examples` tải thưa thư mục `examples/*/export` vào `~/.cache/rydspine/spine-runtimes`, chuyển từng file rồi so với runtime đọc thẳng `.skel`, mọi animation, từng khung, có physics:
-  - trước: 18 file bị từ chối vì tính năng chưa hỗ trợ, vài file đọc được nhưng lệch tới 1000 px;
-  - sau: 43/44 đạt, lệch tối đa 0,01; file còn lại (diamond) là trường hợp suy biến của runtime JS, đã ghi lý do trong script.
-- Lỗi cũ tìm ra nhờ bộ ví dụ:
-  - **số float32 làm tròn còn 7 chữ số**: không khôi phục đúng giá trị, key ở đúng khung bị lùi 1 ulp sang khung trước (powerup, spineboy lệch tới 87). Giờ ghi số ngắn nhất mà vẫn khôi phục đúng float32 (tới 9 chữ số);
-  - **`mixY` của transform** mặc định theo `mixX` của pose, kể cả khi không dùng x; giờ luôn ghi khi cần.
-- Fixture mới `test/fixtures/features` do chính Spine 4.3.26 tạo (`acceptance/skel-fixture.ts`): test so từng bit các frame của timeline, so tư thế với bản nhị phân và với JSON của Spine. JSON chuyển từ `.skel` của 7 ví dụ lớn đều được Spine import lại.
-- `constraint_add` thêm **path** và **slider**:
-  - path: đưa các điểm world-space, rydspine tạo slot `<tên>-path` với đường cong mượt (Catmull-Rom) đi qua các điểm, rồi constraint; `closed` cho bánh xích, `pathBone` để path đi theo một xương;
-  - slider: phát một animation theo `time` hoặc theo thuộc tính của một xương điều khiển; `anim_remove` từ chối xoá animation mà slider đang dùng.
-- **Lỗi của Spine Editor 4.3.26**: khi import, Spine sắp xếp animation theo tên (tự nhiên, không phân biệt hoa thường, thư mục sau cùng) nhưng giữ animation của slider theo vị trí trong file, nên slider trỏ nhầm. rydspine giờ luôn lưu animation theo đúng thứ tự đó; dự án path + slider qua Spine khớp hoàn toàn.
-- `acceptance/compare.ts`: tách phần so tư thế dùng chung cho `spine:check`, test `.skel` và `skel:examples`; so thêm khung của chuỗi ảnh; có thể lấy mẫu giữa hai khung. `spine:check` thử lại một lần khi xuất ảnh lỗi thoáng qua, và báo phần cuối log.
-- Skill `.claude/skills/spine-rigging/SKILL.md`: quy trình dùng tool, công thức từng loại constraint với số liệu từ 30 dự án ví dụ (physics dùng nhiều nhất: inertia ≈ 0,37, strength ≈ 135, damping ≈ 0,82; transform `mixX: -1` để giữ cố định; path `percent` + `chainScale` cho tay chân cao su, `length` + `chain` cho xích), và các quy tắc Spine Editor khắt khe.
-- Test: 35 test đạt; `spine:check` 6/6 (car lỗi xuất ảnh một lần, chạy lại được).
+### 2026-10-31 (cont. 4)
+- `.skel` now reads transform, path and slider constraints, image sequences (region and mesh) and their timelines; linked meshes whose source is in another slot also record `slot`.
+- Checked against the official examples (`github.com/EsotericSoftware/spine-runtimes`, branch 4.3, 44 `.skel` files). The new script `npm run skel:examples` sparse-downloads `examples/*/export` into `~/.cache/rydspine/spine-runtimes`, converts each file and compares it with the runtime reading the `.skel` directly, every animation, every frame, with physics:
+  - before: 18 files rejected for unsupported features, a few read but off by up to 1000 px;
+  - after: 43/44 pass, max deviation 0.01; the remaining file (diamond) is a degenerate case of the JS runtime, with the reason noted in the script.
+- Old bugs found through the examples:
+  - **float32 values rounded to 7 digits**: values were not recovered exactly, and keys exactly on a frame slipped 1 ulp into the previous frame (powerup, spineboy off by up to 87). Now writes the shortest number that still recovers the float32 exactly (up to 9 digits);
+  - **transform `mixY`** defaults to the pose's `mixX`, even when x is unused; now always written when needed.
+- New fixture `test/fixtures/features` created by Spine 4.3.26 itself (`acceptance/skel-fixture.ts`): tests compare timeline frames bit for bit, and poses against the binary and against Spine's JSON. JSON converted from the `.skel` of 7 large examples is re-imported by Spine.
+- `constraint_add` adds **path** and **slider**:
+  - path: give world-space points, rydspine creates a `<name>-path` slot with a smooth curve (Catmull-Rom) through them, then the constraint; `closed` for tank treads, `pathBone` so the path follows a bone;
+  - slider: plays an animation by `time` or by a property of a control bone; `anim_remove` refuses to delete an animation a slider uses.
+- **A Spine Editor 4.3.26 bug**: on import, Spine sorts animations by name (natural, case-insensitive, folders last) but keeps slider animation references by file position, so sliders point at the wrong one. rydspine now always saves animations in that order; path + slider projects through Spine match exactly.
+- `acceptance/compare.ts`: the pose comparison shared by `spine:check`, the `.skel` tests and `skel:examples`; also compares image sequence frames; can sample between frames. `spine:check` retries once on a transient image export failure and reports the tail of the log.
+- Skill `.claude/skills/spine-rigging/SKILL.md`: the tool workflow, recipes for each constraint kind with numbers from the 30 example projects (physics most used: inertia ≈ 0.37, strength ≈ 135, damping ≈ 0.82; transform `mixX: -1` to hold still; path `percent` + `chainScale` for rubber limbs, `length` + `chain` for chains), and the Spine Editor's strict rules.
+- Tests: 35 passing; `spine:check` 6/6 (car failed image export once, passed on rerun).
 
-### 2026-10-31 (tiếp 5)
+### 2026-10-31 (cont. 5)
 
-- Tool `anim_constraint_keys`: key cho mọi timeline constraint theo đúng cách runtime 4.3 đọc JSON. IK (mix, softness, bend, compress, stretch), mix của transform/path, position/spacing của path, physics (inertia, strength, damping, mass, wind, gravity, mix, reset; constraint `""` = mọi physics), slider (time, mix). Kênh bỏ trống giữ giá trị setup; ease tạo một bezier cho mỗi kênh. Lưu ý: transform chỉ có mix ở kênh được điều khiển, kênh khác runtime đọc là 0.
-- Tool `sequence_import`: các PNG thành một attachment chuỗi ảnh (ảnh `<tên>/<tên>01…`, `start` 1, `digits` 2), slot mới hoặc thêm vào slot có sẵn. Tool `anim_sequence_keys`: mode, frame bắt đầu, delay. `validate` kiểm mọi frame; `preview` vẽ đúng frame đang hiện.
-- `constraint_remove` xoá luôn timeline của constraint (trước đây runtime từ chối skeleton). Độ dài animation tính cả timeline constraint và chuỗi ảnh.
-- Asset nghiệm thu thứ 7 `lantern` (đèn lồng) dùng cả ba tool: lửa chuỗi ảnh 4 frame, gió physics có key, slider, đốm sáng chạy theo path đóng, mix transform có key. `spine:check` 7/7, lantern lệch 0,0000 sau khi qua Spine.
-- Tìm và ghi các MCP Spine của cộng đồng vào `REFERENCES.md`, kèm ý tưởng nên lấy.
-- Test: 38 test đạt.
+- Tool `anim_constraint_keys`: keys for every constraint timeline, exactly as runtime 4.3 reads JSON. IK (mix, softness, bend, compress, stretch), transform/path mixes, path position/spacing, physics (inertia, strength, damping, mass, wind, gravity, mix, reset; constraint `""` = all physics), slider (time, mix). Empty channels keep the setup value; ease creates one bezier per channel. Note: a transform has mixes only for the channels it drives; the runtime reads the others as 0.
+- Tool `sequence_import`: PNGs become an image sequence attachment (images `<name>/<name>01…`, `start` 1, `digits` 2), in a new slot or added to an existing one. Tool `anim_sequence_keys`: mode, start frame, delay. `validate` checks every frame; `preview` draws the frame being shown.
+- `constraint_remove` also removes the constraint's timelines (the runtime used to reject the skeleton). Animation duration counts constraint and image sequence timelines.
+- The 7th acceptance asset, `lantern`, uses all three tools: a 4-frame image sequence flame, keyed physics wind, a slider, a spark running along a closed path, keyed transform mixes. `spine:check` 7/7, lantern deviation 0.0000 after going through Spine.
+- Found the community Spine MCPs and recorded them in `REFERENCES.md`, with ideas worth taking.
+- Tests: 38 passing.
 
-### 2026-10-31 (tiếp 6)
+### 2026-10-31 (cont. 6)
 
-- Tool `event_define` (giá trị int/float/string, audio kèm volume/balance; `remove` xoá cả key) và `anim_event_keys` (key chỉ ghi giá trị khác định nghĩa; event chưa có thì tự định nghĩa; cùng tên cùng thời điểm thì thay). `events` được đặt trước `animations` như Spine ghi.
-- Tool `anim_draw_order_keys`: mỗi key cho thứ tự slot từ sau ra trước, đủ hoặc chỉ các slot đổi chỗ (chúng đổi các vị trí đang giữ trong setup); không có `order` là về setup. Offset ghi gọn như Spine (dãy tăng dài nhất giữ nguyên), dùng chung `src/draworder.ts` với phần đọc `.skel`. `slot_update` đổi thứ tự slot thì tính lại mọi key để mỗi key vẫn hiện đúng thứ tự cũ.
-- `anim_gait` báo thời điểm từng chân chạm đất; tuỳ chọn `event` (vd `footstep`) key event ở đó, string là tên xương chân. Asset `hero` dùng cho cả hai animation chạy.
-- Mọi `ease` (key xương, slot, constraint, tween) nhận thêm bezier kiểu CSS `[x1, y1, x2, y2]`; x phải trong 0..1, y được vượt để tạo nảy.
-- `project_status` liệt kê event và key thứ tự vẽ. `spine:check` so thêm các event mỗi animation bắn ra (thời điểm, giá trị).
-- Asset `chest`: nắp bật bằng bezier tự đưa, quầng sáng vẽ đè lên nắp khi mở, event `creak` (audio) và `sparkle`.
-- Test: 41 test đạt. `spine:check` 7/7: event của chest (3) và bước chân của hero (2 và 4) khớp sau khi qua Spine, thứ tự vẽ khớp mọi frame, lệch ≤ 0,0011.
+- Tool `event_define` (int/float/string values, audio with volume/balance; `remove` also deletes the keys) and `anim_event_keys` (keys only write values that differ from the definition; undefined events are defined automatically; same name at the same time replaces). `events` is placed before `animations`, as Spine writes it.
+- Tool `anim_draw_order_keys`: each key gives the slot order back to front, complete or only the slots that swap (they trade the positions they hold in the setup); no `order` returns to the setup. Offsets are written compactly like Spine (the longest increasing run stays put), sharing `src/draworder.ts` with the `.skel` reader. When `slot_update` reorders slots, every key is recomputed so each key still shows its previous order.
+- `anim_gait` reports when each foot touches the ground; the `event` option (e.g. `footstep`) keys an event there, with the foot bone's name as the string. The `hero` asset uses it for both running animations.
+- Every `ease` (bone, slot, constraint keys, tween) also accepts a CSS-style bezier `[x1, y1, x2, y2]`; x must be within 0..1, y may exceed it to overshoot.
+- `project_status` lists events and draw order keys. `spine:check` also compares the events each animation fires (time, values).
+- Asset `chest`: the lid pops with a custom bezier, the glow drawn over the lid when open, `creak` (audio) and `sparkle` events.
+- Tests: 41 passing. `spine:check` 7/7: chest's events (3) and hero's footsteps (2 and 4) match after going through Spine, draw order matches on every frame, deviation ≤ 0.0011.
 
-### 2026-10-31 (tiếp 8)
+### 2026-10-31 (cont. 8)
 
-- `mirror_bones`: chép một bên rig (xương con, slot, attachment region/mesh/path/box/clip/point, IK đảo bendPositive, physics) qua đường gương dọc; tên đổi bên (left↔right, l↔r, camelCase, `sides` tuỳ chọn).
-- `mirror_animation`: `swap` đổi timeline trái/phải giữ giá trị; `mirror` phản chiếu (rotate/shear đổi dấu, translate theo khung cha, IK bend theo setup, deform mesh không weight). Slot, constraint, draw order, event đổi bên theo.
-- Test `test/mirror.test.ts` (4): runtime xác nhận mỗi xương của bản mirror trùng ảnh phản chiếu của bản gốc. Chưa chạy `spine:check` cho phần này.
+- `mirror_bones`: copies one side of the rig (child bones, slots, region/mesh/path/box/clip/point attachments, IK with bendPositive flipped, physics) across a vertical mirror line; names switch sides (left↔right, l↔r, camelCase, optional `sides`).
+- `mirror_animation`: `swap` swaps left/right timelines keeping values; `mirror` reflects (rotate/shear change sign, translate in the parent's frame, IK bend from the setup, deform on unweighted meshes). Slots, constraints, draw order and events switch sides accordingly.
+- Tests `test/mirror.test.ts` (4): the runtime confirms each bone of the mirrored version matches the mirror image of the original. `spine:check` not yet run for this part.
 
-## 2026-10-31 (tiếp 7)
+### 2026-10-31 (cont. 7)
 
-- Tool `shape_add`: attachment `point` (vị trí, hướng theo world, đi theo xương), `boundingbox` và `clipping` trong slot mới. Hình là các điểm world, hoặc `around` dò viền ảnh (region) hay viền hull (mesh) của một slot, `padding` nới ra. Clipping che các slot từ `from` tới `end` và được đặt ngay dưới `from`; key thứ tự vẽ được tính lại (slot mới nằm ngay dưới slot phía trên nó trong setup).
-- Path constraint nhận `pathBones` (và `maxInfluences`, mặc định 2): mỗi điểm của đường cong gắn trọng số vào các xương điều khiển gần nhất, tay nắm theo trọng số của điểm. Từ chối xương thuộc chính chuỗi được path kéo (vòng lặp). Tách phần tính trọng số dùng chung với `mesh_generate`.
-- `preview` (khi hiện xương) vẽ bounding box nét đứt và point.
-- `spine:check` so thêm đỉnh của mọi attachment dạng đỉnh (bounding box, clipping, path) và vị trí/hướng của point.
-- Asset nghiệm thu: `tree` có dây leo treo trên nhánh, path gắn vào nhánh và xương đầu dây; `chest` có point `coin-spawn` trên nắp, vùng va chạm dò theo thân rương và clipping cho quầng sáng.
-- Test: 44 test đạt. `spine:check` 7/7, lệch ≤ 0,0011.
+- Tool `shape_add`: `point` attachments (position, direction in world space, following a bone), `boundingbox` and `clipping` in a new slot. Shapes are world points, or `around` traces the image outline (region) or hull (mesh) of a slot, expanded by `padding`. Clipping masks the slots from `from` to `end` and is placed right below `from`; draw order keys are recomputed (the new slot sits right below the slot above it in the setup).
+- Path constraints accept `pathBones` (and `maxInfluences`, default 2): each point of the curve is weighted to the nearest control bones, handles following their point's weights. Bones of the chain the path drives are rejected (a cycle). The weight computation is shared with `mesh_generate`.
+- `preview` (with bones shown) draws dashed bounding boxes and points.
+- `spine:check` also compares the vertices of every vertex attachment (bounding box, clipping, path) and point positions/directions.
+- Acceptance assets: `tree` has a vine hanging from a branch, its path weighted to the branch and a tip bone; `chest` has a `coin-spawn` point on the lid, a hit area traced around the chest body and clipping for the glow.
+- Tests: 44 passing. `spine:check` 7/7, deviation ≤ 0.0011.
 
-### 2026-10-31 (tiếp 9)
+### 2026-10-31 (cont. 9)
 
-- `psd_import` đọc layer đánh dấu pivot:
-  - layer `<tên>[pivot]` (chấm nhỏ, không phân biệt hoa thường, ẩn cũng được) không thành hình; tại tâm của nó, rydspine tạo xương cho layer hoặc nhóm `<tên>` nằm cạnh;
-  - `[pivot]` (hoặc `<tên nhóm>[pivot]`) nằm trong nhóm là xương của nhóm;
-  - xương lồng nhau theo nhóm PSD; bộ phận không có pivot riêng thì gắn vào xương của nhóm gần nhất, hình giữ nguyên vị trí;
-  - marker không khớp layer nào, hoặc bị trùng, được liệt kê ở phần bỏ qua; không có marker thì kết quả như cũ.
-- Máy Mac của người dùng có Spine: `SPINE_CLI=/Applications/Spine.app/Contents/MacOS/Spine npm run spine:check` chạy được.
-- Asset nghiệm thu thứ 8 `crab` (cua): dựng từ PSD có marker pivot (nhóm tay → càng → kẹp), mesh có trọng số ở tay; `mirror_bones` tạo nửa phải; `mirror_animation` tạo `wave-right` (mirror) và `wave-swap` (swap). `spine:check` 8/8, cua lệch 0,0000 ở cả 3 animation; dải hình do Spine vẽ cho thấy `wave-right` là ảnh gương của `wave`.
-- Test: 45/49 đạt trên máy Mac. 4 test lỗi vì máy chưa cài gói `playwright` (cần cho preview PNG và trang player); trên `main` sạch cũng lỗi y như vậy.
-- `playwright` 1.64.1 thành devDependency (cài Chromium: `npx playwright install chromium`). Lỗi lộ ra sau đó: test trang player mất WebGL context (`getParameter` trả `null`) vì cờ cũ `--use-gl=swiftshader`. Trên Chromium 156 (macOS), cờ này hỏng khi đã có vài lần mở Chromium trước trong cùng tiến trình (do preview). Đổi sang `--use-angle=swiftshader`. Test: 49/49 đạt trên máy Mac.
+- `psd_import` reads pivot marker layers:
+  - a `<name>[pivot]` layer (a small dot, case-insensitive, may be hidden) does not become an image; at its center, rydspine creates a bone for the layer or group `<name>` next to it;
+  - a `[pivot]` (or `<group name>[pivot]`) inside a group is the group's bone;
+  - bones nest like the PSD groups; parts without their own pivot are bound to the nearest group's bone, images kept in place;
+  - markers matching no layer, or duplicated, are listed as skipped; with no markers the result is as before.
+- The user's Mac has Spine: `SPINE_CLI=/Applications/Spine.app/Contents/MacOS/Spine npm run spine:check` works.
+- The 8th acceptance asset, `crab`: built from a PSD with pivot markers (arm group → claw → pincer), weighted meshes on the arms; `mirror_bones` creates the right half; `mirror_animation` creates `wave-right` (mirror) and `wave-swap` (swap). `spine:check` 8/8, crab deviation 0.0000 in all 3 animations; the strips Spine renders show `wave-right` is the mirror image of `wave`.
+- Tests: 45/49 passing on the Mac. 4 tests failed because the machine lacked the `playwright` package (needed for PNG previews and the player page); a clean `main` fails the same way.
+- `playwright` 1.64.1 became a devDependency (install Chromium: `npx playwright install chromium`). A bug surfaced afterwards: the player page test lost its WebGL context (`getParameter` returned `null`) because of the old `--use-gl=swiftshader` flag. On Chromium 156 (macOS), that flag breaks after Chromium has been launched a few times earlier in the same process (by previews). Switched to `--use-angle=swiftshader`. Tests: 49/49 passing on the Mac.
 
-### 2026-10-31 (tiếp 10)
+### 2026-10-31 (cont. 10)
 
-- Nghiệm thu trên art thật: `npm run real:art` (`acceptance/real-art.ts`) dùng con rồng trong bộ ví dụ của Spine (art của Thiago Brayner; giấy phép chỉ cho trình diễn, không phát tán, không làm tác phẩm phái sinh, nên chỉ tải vào `~/.cache/rydspine/spine-art`, kết quả nằm trong `acceptance/out/`).
-  - Bộ ví dụ không có PSD, nên script dựng PSD giống file họa sĩ giao: 30 bộ phận vẽ đúng chỗ (xoay như tư thế setup gốc), layer phẳng theo thứ tự vẽ, chấm `<phần>[pivot]` ẩn ở mỗi khớp; cánh là chuỗi 9 frame.
-  - Chỉ dùng tool MCP: `psd_import`, `bone_add` (khớp không có hình), `bone_update` (cây xương, hướng và độ dài), `sequence_import` cho cánh, physics cho đuôi, animation `fly` 0,9 s (cánh lặp 9 frame, thân nhún, cổ/đầu/hàm/chân/đuôi lệch pha).
-  - Kết quả: tư thế setup trùng bản gốc 99,99% vùng đặc, lệch màu trung bình 0,31/255; 32 xương nằm đúng khớp (lệch ≤ 0,63 px vì chấm pivot là số nguyên) và đúng hướng (≤ 0,005°); validate đạt, vòng lặp khớp; qua Spine Editor lệch 0,0000.
-- Thiếu sót lộ ra nhờ art thật: xương tạo từ pivot dài 0, góc 0, nên physics `rotate` không có tác dụng; đổi góc xương thì kéo hình và xương con theo. Thêm `bone_update` `compensate: true` (như "Compensate" của Spine Editor): hình (region, mesh không trọng số) và xương con giữ nguyên chỗ khi xương dời hoặc xoay; từ chối khi đổi scale (region không biểu diễn được kéo giãn theo trục xoay). Test `test/compensate.test.ts`.
-- `spine-check.ts` tách hàm `roundTrip` dùng chung.
-- Test: 50/50 đạt.
+- Acceptance on real art: `npm run real:art` (`acceptance/real-art.ts`) uses the dragon from Spine's example set (art by Thiago Brayner; the license allows demonstration only, no redistribution, no derivative works, so it is only downloaded into `~/.cache/rydspine/spine-art`, with results in `acceptance/out/`).
+  - The example set has no PSD, so the script builds a PSD like one an artist would deliver: 30 parts drawn in place (rotated as in the original setup pose), flat layers in draw order, hidden `<part>[pivot]` dots at each joint; the wings are a 9-frame sequence.
+  - MCP tools only: `psd_import`, `bone_add` (joints with no image), `bone_update` (bone tree, direction and length), `sequence_import` for the wings, physics for the tail, a 0.9 s `fly` animation (9-frame looping wings, body bob, neck/head/jaw/legs/tail out of phase).
+  - Result: the setup pose matches the original on 99.99% of solid area, mean color deviation 0.31/255; 32 bones sit on their joints (off by ≤ 0.63 px because pivot dots are integers) and point the right way (≤ 0.005°); validate passes, the loop is seamless; through the Spine Editor the deviation is 0.0000.
+- A gap exposed by real art: bones created from pivots have length 0 and angle 0, so physics `rotate` has no effect; changing a bone's angle dragged its images and child bones along. Added `bone_update` `compensate: true` (like the Spine Editor's "Compensate"): images (regions, unweighted meshes) and child bones stay put when the bone moves or rotates; rejected when changing scale (a region cannot represent a stretch along a rotated axis). Test `test/compensate.test.ts`.
+- `spine-check.ts` factors out a shared `roundTrip` function.
+- Tests: 50/50 passing.
 
-### 2026-10-31 (tiếp 11)
+### 2026-10-31 (cont. 11)
 
-- Bộ cài cho người khác (không cần biết dòng lệnh): trang `docs/index.html` (bật GitHub Pages thư mục `docs/`) có nút tải bộ cài theo hệ điều hành.
-  - macOS/Linux: `rydspine-setup-mac.zip` chứa `rydspine-setup.command` (zip để giữ quyền chạy; tải thẳng thì mất). Windows: `rydspine-setup-windows.bat`. Nguồn ở `installer/`, đóng gói bằng `npm run installers`.
-  - Bộ cài kiểm tra Node 20+, tải mã nguồn bằng `curl` + `tar` (không cần git) vào `~/.rydspine/app`, `npm install --omit=dev`, rồi chạy trình cài đặt `src/setup.ts` (`npm run setup`).
-  - `src/setup.ts`: hỏi từng app có trên máy rồi ghi cấu hình MCP bằng đường dẫn tuyệt đối (app GUI không thấy PATH của nvm): Claude Code (`claude mcp add -s user`, chép skill `spine-rigging`), Claude Desktop (`claude_desktop_config.json`, sao lưu trước), Codex (`codex mcp add`); hỏi tải Chromium cho preview PNG; dò Spine Editor; cuối cùng chạy server và đếm tool. Dự án lưu ở `~/.rydspine/workspaces`. Cờ `--yes`, `--clients=`, `--no-chromium`, `--home=<thư mục>` (chạy thử không đụng cấu hình thật).
-  - `tsx` và `playwright` chuyển sang `dependencies` vì máy người dùng chạy server bằng tsx và preview cần playwright.
-  - Đã thử trọn quy trình trên Mac (từ file zip giải nén bằng `ditto` như Safari, cài vào thư mục tạm): cả 3 app ghi đúng cấu hình, server chạy với 46 tool. Bộ cài Windows chưa chạy thử trên máy Windows.
-- Chặn: repo đang private, nên bộ cài (tải từ `codeload.github.com`) và GitHub Pages chỉ chạy khi repo chuyển public. Trước đó thử bằng `RYDSPINE_SOURCE=<repo>`.
-- Demo trong phiên (không commit, art do Codex vẽ): robot vẫy tay (IK, chuỗi ăng-ten, physics), tấm vải bị kéo lên (mesh nhiều xương + physics; validate bắt mesh gập và đã chỉnh), rèm cuốn từng nấc (clipping đi theo cuộn rèm, event `notch`).
-- Test: 50/50 đạt.
+- Installer for other people (no command line knowledge needed): the `docs/index.html` page (enable GitHub Pages on the `docs/` folder) has an installer download button per OS.
+  - macOS/Linux: `rydspine-setup-mac.zip` holds `rydspine-setup.command` (zipped to keep the execute bit; a direct download loses it). Windows: `rydspine-setup-windows.bat`. Sources in `installer/`, packaged with `npm run installers`.
+  - The installer checks for Node 20+, downloads the source with `curl` + `tar` (no git needed) into `~/.rydspine/app`, runs `npm install --omit=dev`, then the setup program `src/setup.ts` (`npm run setup`).
+  - `src/setup.ts`: asks about each app found on the machine, then writes the MCP configuration with absolute paths (GUI apps do not see nvm's PATH): Claude Code (`claude mcp add -s user`, copies the `spine-rigging` skill), Claude Desktop (`claude_desktop_config.json`, backed up first), Codex (`codex mcp add`); offers to download Chromium for PNG previews; looks for the Spine Editor; finally runs the server and counts the tools. Projects are stored in `~/.rydspine/workspaces`. Flags `--yes`, `--clients=`, `--no-chromium`, `--home=<dir>` (dry run without touching the real configuration).
+  - `tsx` and `playwright` moved to `dependencies` because users' machines run the server with tsx and previews need playwright.
+  - The full flow was tried on a Mac (from the zip extracted with `ditto` like Safari does, installed into a temp folder): all 3 apps got correct configuration, the server ran with 46 tools. The Windows installer has not been tried on a Windows machine.
+- Blocker: the repo is private, so the installer (downloading from `codeload.github.com`) and GitHub Pages only work once the repo is public. Until then, test with `RYDSPINE_SOURCE=<repo>`.
+- In-session demos (not committed, art drawn by Codex): a waving robot (IK, antenna chain, physics), a sheet of cloth pulled up (multi-bone mesh + physics; validate caught a folded mesh, which was fixed), a blind rolling up notch by notch (clipping following the roll, a `notch` event).
+- Tests: 50/50 passing.
 
-### 2026-10-31 (tiếp 12)
+### 2026-10-31 (cont. 12)
 
-- Đã merge `claude/psd-pivots` vào `main` (merge commit `a7f92d9`, merge bằng git vì máy không có `gh`).
-- Tách ảnh phẳng (`src/split.ts`), thêm 2 tool (tổng 48):
-  - `image_inspect`: ảnh có lưới toạ độ đánh số (pixel ảnh, y hướng xuống), nền dò được, các mảng rời và khung của chúng.
-  - `image_split`: không có `parts` thì mỗi mảng rời trên nền là một bộ phận (mảng nhỏ hơn `minArea` gộp vào mảng gần nhất); có `parts` thì cắt theo polygon, liệt kê từ sau ra trước, chỗ chồng nhau thuộc bộ phận phía trước, pixel lẻ trong `snap` px gộp vào bộ phận gần nhất. Nền: `auto` (trong suốt nếu viền trong suốt, không thì màu phổ biến nhất ở viền, loang từ viền nên vùng trắng nằm kín bên trong vẫn giữ), `transparent` hoặc mã màu. `overlap` vẽ bù phần bị bộ phận phía trước che bằng cách loang màu mép vào, chỉ trong polygon của bộ phận. Trả overlay tô màu từng bộ phận (pixel chưa thuộc ai màu magenta); `dryRun` chỉ trả overlay. Nhập như `psd_import` (gốc toạ độ mặc định giữa đáy).
-  - Test `test/split.test.ts` (5 ca). Tổng 55/55 test qua.
-- Thử thật trên nhân vật Codex vẽ (1254x1254, nền trắng, không commit): 6 bộ phận (2 tay, 2 chân, thân, đầu) sau 2 lần chỉnh polygon, rig 7 xương, animation vẫy tay. Validate OK, Spine 4.3.26 nhập được. Bài học (đã ghi vào skill): phải khoanh cả phần bị che (cổ dưới đầu, đầu đùi dưới áo), nếu không khớp hở trắng khi xoay.
-- Hạn chế: vẽ bù chỉ loang màu (không vẽ lại chi tiết); (đã sửa ở tiếp 13) viền khử răng cưa với nền màu giữ quầng nhạt; dưới nách còn vệt nhỏ khi polygon của tay rộng hơn dáng tay.
+- Merged `claude/psd-pivots` into `main` (merge commit `a7f92d9`, merged with git since the machine has no `gh`).
+- Flat picture splitting (`src/split.ts`), 2 new tools (48 total):
+  - `image_inspect`: the image with a numbered coordinate grid (image pixels, y down), the detected background, the separate islands and their boxes.
+  - `image_split`: without `parts`, each separate island on the background is a part (islands smaller than `minArea` merge into the nearest); with `parts`, cuts by polygon, listed back to front, overlaps going to the part in front, stray pixels within `snap` px merging into the nearest part. Background: `auto` (transparent if the border is transparent, otherwise the most common border color, flood-filled from the border so enclosed white areas are kept), `transparent` or a color code. `overlap` paints in areas hidden by the part in front by spreading the edge colors inward, only inside the part's polygon. Returns an overlay coloring each part (unclaimed pixels in magenta); `dryRun` only returns the overlay. Imports like `psd_import` (origin at the bottom center by default).
+  - Tests `test/split.test.ts` (5 cases). 55/55 tests passing in total.
+- Tried for real on a character drawn by Codex (1254x1254, white background, not committed): 6 parts (2 arms, 2 legs, body, head) after 2 rounds of polygon adjustment, a 7-bone rig, a waving animation. Validate OK, Spine 4.3.26 imports it. Lesson (recorded in the skill): outline the hidden piece too (neck under the head, thighs under the shirt), or joints show white gaps when they turn.
+- Limitations: painting-in only spreads colors (does not redraw detail); (fixed in cont. 13) anti-aliased rims on a colored background kept a faint halo; a small streak remains under the armpit when an arm's polygon is wider than the arm.
 
-### 2026-10-31 (tiếp 13)
+### 2026-10-31 (cont. 13)
 
-- `image_split` khử quầng viền khi ảnh có nền một màu (`matte`, mặc định 2 px, 0 = tắt): mỗi pixel ở dải mép được đọc như màu nền pha với một màu nét gần đó (pixel khác nền nhất mà vẫn giải thích được màu mép), rồi nhận độ trong suốt của phép pha và màu nét thật. Pixel không giải thích được, hoặc thuộc một mảng màu phẳng chạm nền (da sát nền trắng), giữ nguyên. Kết quả báo số pixel đã xử lý.
-- Thử trên ảnh cậu bé (nền trắng): 7981 pixel viền được tách; ghép lên nền tối thì hết viền răng cưa trắng quanh nét đen ở tóc và bàn tay, màu bên trong giữ nguyên.
-- Test mới cho viền pha 50%, mảng da chạm nền và `matte: 0`. 56/56 test qua.
+- `image_split` removes edge halos when the image has a single-color background (`matte`, default 2 px, 0 = off): each pixel in the rim band is read as the background color mixed with a nearby stroke color (the pixel least like the background that still explains the rim color), then takes the mix's alpha and the true stroke color. Pixels that cannot be explained, or that belong to a flat color area touching the background (skin against a white background), are left unchanged. The result reports how many pixels were processed.
+- Tried on the boy picture (white background): 7981 rim pixels unmixed; composited on a dark background, the white anti-aliasing fringe around the black lines of the hair and hands is gone, interior colors unchanged.
+- New tests for a 50% mixed rim, a skin area touching the background and `matte: 0`. 56/56 tests passing.
 
-### 2026-10-31 (tiếp 14)
+### 2026-10-31 (cont. 14)
 
-- Thử trên art vé của người dùng (`~/Downloads/spine/Tickets`, không commit). Bản đầu tự nghĩ (vé bay vào, nổi, lật bằng `scaleX`) chưa đạt. Đọc file mẫu `Ticket.spine` (export JSON bằng Spine CLI, render khung bằng Spine) thì thấy kỹ thuật thật: vé trước là mesh chỉ có viền (50 đỉnh), gắn 6 xương dải dọc chiều dài, mỗi đỉnh 4–6 xương với trọng số trải rộng; từng xương lần lượt (cách nhau 2 frame) dời sang đầu kia và lật `scaleX` về -1 nên vé cuộn qua như trang giấy rồi cuộn về. Vé sau là mesh trên chuỗi xương uốn sóng, tối màu khi vé trước lật; bóng mờ đi; vé trước phóng to 1.78; vệt sáng vàng additive và bản sao additive chớp đỏ.
-- Dựng lại bằng tool rydspine (project `ticket-flip`): Spine render ra gần như trùng khung với mẫu. Khác còn lại: vệt sáng của mẫu là mesh kéo bằng deform, rydspine chưa có tool key deform nên dùng xoay/scale xương.
-- Ba lỗ hổng tool lộ ra và đã sửa:
-  - `mesh_generate` dựng lại được mesh đã có (khôi phục vị trí ảnh bằng khớp affine từ UV sang toạ độ setup); từ chối nếu mesh có key deform. Trước đây phải revert và mất hết animation.
-  - `mesh_generate` thêm `smooth` (px): trọng số trải giữa các xương lân cận (`1/(d²+smooth²)`). Mặc định 0 giữ như cũ (mỗi đỉnh gần như theo một xương), làm giấy/vải uốn bị rách răng cưa.
-  - `validate` không còn coi là lỗi khi mesh gập lúc có xương lật gương (lật trang có chủ ý): ghi "turns over" vào info. Gập do xoay quá tay vẫn là lỗi.
-- Test mới `test/mesh.test.ts` (dựng lại giữ chỗ, smooth trải trọng số, lật trang qua validate). 57/57 test qua.
+- Tried on the user's ticket art (`~/Downloads/spine/Tickets`, not committed). The first self-devised version (ticket flies in, floats, flips with `scaleX`) fell short. Reading the sample file `Ticket.spine` (JSON exported with the Spine CLI, frames rendered with Spine) revealed the real technique: the front ticket is a hull-only mesh (50 vertices) bound to 6 bones laid along its length, each vertex weighted to 4–6 bones with widely spread weights; each bone in turn (2 frames apart) moves to the far end and flips `scaleX` to -1, so the ticket curls over like a page and back. The back ticket is a mesh on a wavy bone chain, darkening while the front ticket flips; the shadow fades; the front ticket scales up to 1.78; a yellow additive glow and an additive copy flashing red.
+- Rebuilt with the rydspine tools (project `ticket-flip`): Spine renders it nearly frame-identical to the sample. Remaining difference: the sample's glow is a mesh stretched with deform; rydspine had no deform key tool yet, so it used bone rotation/scale.
+- Three tool gaps exposed and fixed:
+  - `mesh_generate` can rebuild an existing mesh (recovering the image placement with an affine fit from UVs to setup coordinates); refused if the mesh has deform keys. Previously one had to revert and lose all animations.
+  - `mesh_generate` adds `smooth` (px): weights spread between neighboring bones (`1/(d²+smooth²)`). The default 0 keeps the old behavior (each vertex following almost one bone), which made bending paper/cloth tear into jagged strips.
+  - `validate` no longer treats a mesh folding while a bone is mirrored (an intentional page turn) as an error: it records "turns over" in info. Folds from over-rotation are still errors.
+- New test `test/mesh.test.ts` (rebuild keeps placement, smooth spreads weights, page turn passes validate). 57/57 tests passing.
 
-### 2026-10-31 (tiếp 15)
+### 2026-10-31 (cont. 15)
 
-- Tool mới `anim_deform_keys`: key deform cho mesh (thường hoặc có trọng số). Mỗi key là danh sách phép biến đổi trong toạ độ thế giới, áp lần lượt lên hình setup: `scaleX` theo trục `angle` và `scaleY` vuông góc, `rotate`, rồi dời `x`/`y` quanh `pivot` (mặc định tâm mesh); `radius` giới hạn phép biến đổi vào các đỉnh gần pivot, mờ dần theo cosine (dùng làm tay nắm kéo một chỗ). Tool đổi độ dời thế giới thành offset Spine: với mesh có trọng số, mỗi xương ảnh hưởng nhận cùng độ dời đổi về không gian của nó, nên tổng có trọng số đúng bằng độ dời. Offset 0 ở đầu/cuối được cắt (`offset`); `ease` thành curve 0..1 của deform.
-- `property: "scale"` trong `anim_set_keys`/`anim_tween`/`anim_oscillate`/`anim_bounce` key cả `scalex` và `scaley` cùng lúc.
-- Áp lên `ticket-flip`: vệt sáng thành mesh, 5 key deform chuyển từ key của mẫu (mỗi đỉnh mẫu thành một tay nắm `radius` 300). Spine import và render: vệt vàng quét thành dải dài ngang vé như mẫu.
-- Test mới `test/deform.test.ts` (kéo dãn mesh thường và có trọng số trên xương xoay/scale, khớp từng đỉnh; ease; radius; mesh có deform không dựng lại được; `scale` hai trục). 59/59 test qua.
+- New tool `anim_deform_keys`: deform keys for meshes (plain or weighted). Each key is a list of world-space transforms applied in turn to the setup shape: `scaleX` along the `angle` axis and `scaleY` perpendicular to it, `rotate`, then `x`/`y` moves around a `pivot` (default the mesh center); `radius` limits the transform to vertices near the pivot, fading out with a cosine (used as a handle to drag one spot). The tool converts world moves into Spine offsets: for weighted meshes, each influencing bone receives the same move converted into its space, so the weighted sum equals the move exactly. Zero offsets at the start/end are trimmed (`offset`); `ease` becomes the deform's 0..1 curve.
+- `property: "scale"` in `anim_set_keys`/`anim_tween`/`anim_oscillate`/`anim_bounce` keys both `scalex` and `scaley` at once.
+- Applied to `ticket-flip`: the glow became a mesh, with 5 deform keys converted from the sample's keys (each sample vertex became a `radius` 300 handle). Spine imports and renders it: the yellow glow sweeps into a long band across the ticket like the sample.
+- New test `test/deform.test.ts` (stretching plain and weighted meshes on rotated/scaled bones, matching every vertex; ease; radius; meshes with deform cannot be rebuilt; two-axis `scale`). 59/59 tests passing.
 
-## Việc tiếp theo
+## Next steps
 
-1. Nghiệm thu trên art của chính người dùng khi có (đã đạt trên art rồng của Spine: `npm run real:art`).
-3. Tách ảnh phẳng: đã có bản đầu và đã khử quầng viền. Có thể làm tiếp: AI gợi ý polygon tự động, vẽ bù tốt hơn (inpaint bằng model ảnh).
+1. Acceptance on the user's own art when available (already passed on Spine's dragon art: `npm run real:art`).
+2. Flat picture splitting: first version done, edge halos removed. Possible follow-ups: AI-suggested polygons, better painting-in (inpainting with an image model).

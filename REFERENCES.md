@@ -1,33 +1,33 @@
-# Tham khảo
+# References
 
-Các dự án có thể học theo khi nâng cấp rydspine. Đọc mã của họ để lấy ý tưởng, không chép nguyên văn; giấy phép ghi bên cạnh.
-Cập nhật file này khi tìm được nguồn mới.
+Projects worth learning from when improving rydspine. Read their code for ideas, do not copy it verbatim; licenses are noted alongside.
+Update this file when new sources turn up.
 
-## Spine chính thức
+## Official Spine
 
-- **[EsotericSoftware/spine-runtimes](https://github.com/EsotericSoftware/spine-runtimes)** (nhánh 4.3). Runtime chuẩn
-  (`spine-ts/spine-core` là thư viện rydspine dùng) và `examples/*/export`: ~30 dự án mẫu (spineboy, raptor, mix-and-match,
-  stretchyman, tank, vine, sack, celestial-circus, diamond…) dạng `.json` + `.skel`.
-  - `npm run skel:examples` tải và kiểm phần đọc `.skel` trên toàn bộ mẫu.
-  - Cách rig rút ra từ mẫu: `.claude/skills/spine-rigging/SKILL.md`.
-  - `SkeletonJson.js` / `SkeletonBinary.js` trong `node_modules/@esotericsoftware/spine-core/dist` là chuẩn cho định dạng
-    (giá trị mặc định, thứ tự kênh của curve…).
+- **[EsotericSoftware/spine-runtimes](https://github.com/EsotericSoftware/spine-runtimes)** (branch 4.3). The reference runtimes
+  (`spine-ts/spine-core` is the library rydspine uses) and `examples/*/export`: ~30 sample projects (spineboy, raptor, mix-and-match,
+  stretchyman, tank, vine, sack, celestial-circus, diamond…) as `.json` + `.skel`.
+  - `npm run skel:examples` downloads them and checks `.skel` reading on every sample.
+  - Rigging patterns drawn from the samples: `.claude/skills/spine-rigging/SKILL.md`.
+  - `SkeletonJson.js` / `SkeletonBinary.js` in `node_modules/@esotericsoftware/spine-core/dist` are the reference for the format
+    (default values, curve channel order…).
 
-## MCP cho Spine của cộng đồng (xem ngày 2026-10-31)
+## Community MCPs for Spine (checked 2026-10-31)
 
-| Dự án | Ngôn ngữ, giấy phép | Cập nhật | Điểm đáng học |
+| Project | Language, license | Updated | Worth learning |
 |---|---|---|---|
-| [UmutFarukDilli/spine-mcp](https://github.com/UmutFarukDilli/spine-mcp) | Python, MIT | 2026-10 | Gần rydspine nhất: sửa JSON, dùng Spine CLI để chuyển đổi, test bằng spine-core 4.3. Một tool `spine_set_keyframes` cho mọi timeline (cả `event`, `drawOrder`, `rgba2/rgb2`, `inherit`). Curve nhận preset hoặc bezier chuẩn hoá kiểu CSS `[cx1,cy1,cx2,cy2]`, tự đổi sang bezier tuyệt đối và giữ dáng khi thêm key. `spine_validate` bắt key không sắp xếp, curve vượt khoảng, trường runtime bỏ qua, bố cục constraint 4.2 với 4.3. Có `spine_upgrade`, `spine_doctor`, attachment `point` / `boundingbox`, event. |
-| [zhoushengmin/spine-mcp-server](https://github.com/zhoushengmin/spine-mcp-server) | TypeScript, chưa ghi giấy phép | 2026-08 | Spine 3.8 + Cocos Creator, ~70 tool. Ý tưởng tool: `mirror_bones`, `mirror_animation`, `mix_animations`, `pose_to_animation`, `apply_effect` (thư viện hiệu ứng), `mesh_wave`, `export_sheet` / `export_video`, `scale_project`, `batch_rename`, `rollback`, `cut_parts`, `repack_atlas`. |
-| [egorfedorov/spine-mcp](https://github.com/egorfedorov/spine-mcp) | Python, MIT | 2026-08 | Rig + animate một lệnh từ PSD hoặc thư mục xuất của PhotoshopToSpine; nhận dạng họ trạng thái đầu (mắt/miệng) theo tên layer; `batch` cho cả thư mục nhân vật; preview dạng montage PNG; output chạy được trong spine-pixi. |
-| [ampersante/spine2d-animation-mcp](https://github.com/ampersante/spine2d-animation-mcp) (bản fork giống hệt: [naosen/spine2d-animation-mcp](https://github.com/naosen/spine2d-animation-mcp)) | Python, MIT | 2026-06 | PSD → Spine 4.2: pivot đặt ở mép khớp của bộ phận thay vì tâm ảnh, hoặc theo layer đánh dấu `<part>[pivot]`; quy ước tên layer → cây xương; thứ tự vẽ theo chồng layer PSD. |
+| [UmutFarukDilli/spine-mcp](https://github.com/UmutFarukDilli/spine-mcp) | Python, MIT | 2026-10 | Closest to rydspine: edits JSON, uses the Spine CLI for conversion, tests with spine-core 4.3. One tool `spine_set_keyframes` for every timeline (including `event`, `drawOrder`, `rgba2/rgb2`, `inherit`). Curves take presets or a normalized CSS-style bezier `[cx1,cy1,cx2,cy2]`, converted to absolute beziers and reshaped when keys are added. `spine_validate` catches unsorted keys, out-of-range curves, fields the runtime ignores, 4.2 vs 4.3 constraint layout. Has `spine_upgrade`, `spine_doctor`, `point` / `boundingbox` attachments, events. |
+| [zhoushengmin/spine-mcp-server](https://github.com/zhoushengmin/spine-mcp-server) | TypeScript, no license stated | 2026-08 | Spine 3.8 + Cocos Creator, ~70 tools. Tool ideas: `mirror_bones`, `mirror_animation`, `mix_animations`, `pose_to_animation`, `apply_effect` (effect library), `mesh_wave`, `export_sheet` / `export_video`, `scale_project`, `batch_rename`, `rollback`, `cut_parts`, `repack_atlas`. |
+| [egorfedorov/spine-mcp](https://github.com/egorfedorov/spine-mcp) | Python, MIT | 2026-08 | One-command rig + animate from a PSD or a PhotoshopToSpine export folder; detects head state families (eyes/mouth) from layer names; `batch` for a whole folder of characters; PNG montage previews; output runs in spine-pixi. |
+| [ampersante/spine2d-animation-mcp](https://github.com/ampersante/spine2d-animation-mcp) (identical fork: [naosen/spine2d-animation-mcp](https://github.com/naosen/spine2d-animation-mcp)) | Python, MIT | 2026-06 | PSD → Spine 4.2: pivots at the joint edge of a part instead of the image center, or from `<part>[pivot]` marker layers; layer naming conventions → bone tree; draw order from the PSD layer stack. |
 
-Danh mục để tìm thêm: [glama.ai](https://glama.ai/mcp/servers?query=spine), [mcp.so](https://mcp.so) (tìm "spine").
+Directories to search for more: [glama.ai](https://glama.ai/mcp/servers?query=spine), [mcp.so](https://mcp.so) (search "spine").
 
-## Đã lấy / có thể lấy
+## Taken / could take
 
-- Đã làm: tool key cho mọi timeline constraint (cách "kênh bỏ trống giữ giá trị setup" giống UmutFarukDilli), thêm slider
-  và chuỗi ảnh (họ chưa có).
-- Đã làm: key `event` và `drawOrder`, curve bezier chuẩn hoá kiểu CSS cho mọi `ease`, attachment `point` / `boundingbox` (theo UmutFarukDilli); path gắn vào vài xương điều khiển như ví dụ vine/stretchyman.
-- Đã làm: `mirror_animation` / `mirror_bones`.
-- Đã làm: pivot theo layer đánh dấu `[pivot]` trong `psd_import` (thêm: `[pivot]` trong nhóm cho xương của nhóm, cây xương theo nhóm).
+- Done: key tool for every constraint timeline (the "empty channels keep the setup value" approach, like UmutFarukDilli), plus slider
+  and image sequences (which they lack).
+- Done: `event` and `drawOrder` keys, normalized CSS-style bezier curves for every `ease`, `point` / `boundingbox` attachments (after UmutFarukDilli); paths weighted to a few control bones as in the vine/stretchyman examples.
+- Done: `mirror_animation` / `mirror_bones`.
+- Done: pivots from `[pivot]` marker layers in `psd_import` (plus: `[pivot]` inside a group for the group's bone, bone tree following groups).

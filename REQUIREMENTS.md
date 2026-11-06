@@ -1,115 +1,115 @@
-# rydspine-mcp — Yêu cầu sản phẩm
+# rydspine-mcp — Product requirements
 
-Trạng thái: Bản nháp để thảo luận. Các yêu cầu chi tiết bên dưới là đề xuất; phạm vi phiên bản đầu chưa được chốt.
+Status: draft for discussion. The detailed requirements below are proposals; the scope of the first version is not settled.
 
-## 1. Mục tiêu đã xác nhận
+## 1. Confirmed goals
 
-- Xây dựng MCP riêng cho Spine 4.3.
-- Công cụ cần dựng rig, bao gồm gắn xương, và tạo animation từ yêu cầu bằng ngôn ngữ tự nhiên.
-- Phạm vi phục vụ nhiều loại asset, không chỉ nhân vật.
-- Làm rõ yêu cầu trước khi triển khai.
+- Build a dedicated MCP for Spine 4.3.
+- The tool must build rigs, including binding to bones, and create animations from natural-language requests.
+- Serve many kinds of assets, not only characters.
+- Clarify requirements before implementation.
 
-## 2. Đầu vào
+## 2. Inputs
 
-Các loại đầu vào cần xem xét:
+Input types to consider:
 
-- PSD có nhiều layer.
-- Bộ PNG đã tách từng bộ phận.
-- Ảnh phẳng chưa tách bộ phận.
-- Project Spine hoặc skeleton JSON có sẵn.
-- Mô tả chuyển động; hình ảnh/video tham khảo nếu có.
+- Multi-layer PSD.
+- A set of PNGs already split into parts.
+- A flat picture not yet split into parts.
+- An existing Spine project or skeleton JSON.
+- A description of the motion; reference images/videos if available.
 
-Cần chốt loại đầu vào bắt buộc cho phiên bản đầu. Với ảnh phẳng, việc tách bộ phận và bổ sung phần bị che là một yêu cầu riêng.
+The required input types for the first version need to be decided. For flat pictures, splitting parts and filling in hidden areas is a separate requirement.
 
-## 3. Phân tích asset
+## 3. Asset analysis
 
-- Nhận diện các bộ phận và quan hệ giữa chúng.
-- Xác định cấu trúc phù hợp với từng loại asset.
-- Đề xuất vị trí khớp, pivot và phần cần biến dạng.
-- Phát hiện bộ phận hoặc dữ liệu còn thiếu.
-- Cho phép người dùng sửa kết quả phân tích.
+- Identify the parts and how they relate.
+- Determine a structure suited to each kind of asset.
+- Propose joint positions, pivots and parts that need to deform.
+- Detect missing parts or data.
+- Let the user correct the analysis.
 
-## 4. Dựng rig
+## 4. Rigging
 
-- Tạo bones và quan hệ cha–con.
-- Thiết lập vị trí khớp và setup pose.
-- Tạo slots, attachments và thứ tự hiển thị.
-- Tạo mesh và phân bố weights cho phần cần biến dạng.
-- Thiết lập IK, transform, path và physics constraints khi cần.
-- Hỗ trợ skins và thay đổi attachments.
-- Cho phép thử pose, chỉnh rig và sử dụng lại rig có sẵn.
+- Create bones and parent–child relationships.
+- Set joint positions and the setup pose.
+- Create slots, attachments and draw order.
+- Create meshes and distribute weights for parts that deform.
+- Set up IK, transform, path and physics constraints when needed.
+- Support skins and attachment swaps.
+- Allow test poses, rig adjustments and reuse of existing rigs.
 
-Rig phải phù hợp với cấu trúc và chuyển động cần thực hiện, bao gồm nhiều chân, cánh, chuỗi đốt, bản lề, bánh xe và các phần hình độc lập.
+The rig must suit the structure and the motion to perform, including multiple legs, wings, segmented chains, hinges, wheels and independent shapes.
 
-## 5. Tạo animation
+## 5. Animation
 
-- Nhận mô tả hành động bằng ngôn ngữ tự nhiên.
-- Tạo pose, keyframes, timing và curves tương ứng.
-- Hỗ trợ animation lặp và không lặp.
-- Điều chỉnh được thời lượng, tốc độ, biên độ và độ trễ.
-- Hỗ trợ anticipation, follow-through và chuyển động phụ.
-- Kết hợp nhiều chuyển động trong cùng một animation.
-- Cho phép mô tả động tác riêng và mở rộng bộ hành động.
+- Accept action descriptions in natural language.
+- Create the corresponding poses, keyframes, timing and curves.
+- Support looping and non-looping animations.
+- Allow adjusting duration, speed, amplitude and delay.
+- Support anticipation, follow-through and secondary motion.
+- Combine several motions in one animation.
+- Allow describing custom moves and extending the set of actions.
 
-Ví dụ yêu cầu để thảo luận và chọn bộ nghiệm thu:
+Example requests for discussion and for choosing the acceptance set:
 
-- Nhân vật chạy, dừng lại rồi vung kiếm.
-- Rồng vỗ cánh, cổ và đuôi chuyển động theo.
-- Cây nghiêng theo gió, các nhánh dao động khác nhau.
-- Rương mở nắp rồi bật nảy nhẹ.
-- Xe lăn bánh và thân nhún theo chuyển động.
-- Logo xuất hiện, nảy rồi ổn định.
+- A character runs, stops, then swings a sword.
+- A dragon flaps its wings, neck and tail following.
+- A tree leans in the wind, branches swaying differently.
+- A chest opens its lid then bounces slightly.
+- A car rolls its wheels and the body bobs with the motion.
+- A logo appears, bounces, then settles.
 
-## 6. Chỉnh sửa
+## 6. Editing
 
-- Chỉnh rig và animation bằng yêu cầu tiếp nối.
-- Chỉnh theo bộ phận, animation hoặc khoảng thời gian.
-- Giữ nguyên các phần nằm ngoài phạm vi chỉnh sửa.
-- Cho phép khóa các phần người dùng đã duyệt.
-- Lưu phiên bản để so sánh và quay lại.
-- Hỗ trợ tiếp tục xử lý sau khi người dùng chỉnh trong Spine.
+- Adjust rigs and animations with follow-up requests.
+- Edit by part, animation or time range.
+- Leave parts outside the edited scope unchanged.
+- Allow locking parts the user has approved.
+- Save versions to compare and go back.
+- Support continuing after the user edits in Spine.
 
-## 7. Preview và kiểm tra
+## 7. Preview and checks
 
-- Phát animation, tua và xem từng thời điểm.
-- Hiển thị bones, mesh, weights và constraints khi cần.
-- Kiểm tra bằng runtime Spine 4.3.
-- Phát hiện lỗi dữ liệu, thiếu hình và tham chiếu không hợp lệ.
-- Hỗ trợ đánh giá lỗi chuyển động như trượt chân, tách khớp, biến dạng bất thường và giật ở điểm nối vòng lặp.
-- Cho phép xem lại kết quả sau mỗi lần chỉnh sửa.
+- Play animations, scrub and view any point in time.
+- Show bones, meshes, weights and constraints when needed.
+- Check with the Spine 4.3 runtime.
+- Detect data errors, missing images and invalid references.
+- Help assess motion defects such as foot sliding, joint separation, abnormal deformation and pops at the loop seam.
+- Allow reviewing the result after each edit.
 
-## 8. Đầu ra
+## 8. Outputs
 
-- Project `.spine` mở và chỉnh sửa tiếp được trong Spine 4.3.
-- Skeleton JSON/binary, atlas và texture cho runtime mục tiêu.
-- Preview để người dùng đánh giá chuyển động.
-- Báo cáo phần đã hoàn thành, lỗi và giới hạn còn lại.
+- A `.spine` project that opens and can be edited further in Spine 4.3.
+- Skeleton JSON/binary, atlas and textures for the target runtime.
+- Previews for the user to judge the motion.
+- A report of what is done, errors and remaining limitations.
 
-## 9. Tiêu chí nghiệm thu đề xuất
+## 9. Proposed acceptance criteria
 
-- Hoàn thành luồng từ đầu vào đã thống nhất đến rig và animation.
-- Kết quả thể hiện đúng hành động và thông số được yêu cầu.
-- Rig đáp ứng phạm vi chuyển động đã thống nhất.
-- Animation lặp nối vòng liên tục khi được yêu cầu.
-- Chỉnh sửa tác động đúng phạm vi được chọn.
-- Kết quả mở được trong Spine 4.3 và chạy trên runtime mục tiêu.
-- Có thể chỉnh thủ công tiếp trong Spine.
-- Bộ nghiệm thu bao phủ nhiều loại asset, không chỉ nhân vật.
-- Có thể khôi phục phiên bản trước khi chỉnh sửa.
+- Complete the flow from the agreed inputs to rig and animation.
+- Results show the requested action and parameters.
+- The rig covers the agreed range of motion.
+- Looping animations loop seamlessly when requested.
+- Edits affect exactly the selected scope.
+- Results open in Spine 4.3 and run on the target runtime.
+- Can be edited further by hand in Spine.
+- The acceptance set covers many kinds of assets, not only characters.
+- Previous versions can be restored after an edit.
 
-Các tiêu chí về chất lượng hình ảnh và chuyển động cần mẫu tham chiếu, tình huống kiểm thử và ngưỡng chấp nhận cụ thể trước khi nghiệm thu.
+Criteria on visual and motion quality need reference samples, test scenarios and concrete thresholds before acceptance.
 
-## 10. Các điểm cần chốt
+## 10. Open decisions
 
-- Loại đầu vào bắt buộc cho phiên bản đầu.
-- Mức tự động hóa và các bước người dùng cần duyệt.
-- Loại asset và độ phức tạp ưu tiên.
-- Chuẩn chất lượng chuyển động và mẫu tham chiếu nghiệm thu.
-- Phiên bản Spine 4.3 cụ thể và runtime đích.
-- Hệ điều hành cần hỗ trợ.
-- Xử lý qua file hay cần thao tác trong editor đang mở.
-- Giới hạn thời gian xử lý và chi phí cho mỗi tác vụ.
+- Required input types for the first version.
+- Level of automation and the steps the user must approve.
+- Priority asset types and complexity.
+- Motion quality standard and acceptance reference samples.
+- Exact Spine 4.3 version and target runtime.
+- Operating systems to support.
+- File-based processing or working inside an open editor.
+- Processing time and cost limits per task.
 
-## 11. Trạng thái quyết định kỹ thuật
+## 11. Status of technical decisions
 
-Ngôn ngữ lập trình, SDK, cơ chế kết nối MCP, cách dựng rig và phương pháp tạo chuyển động chưa được chốt. Các phương án đã trao đổi là gợi ý để đánh giá sau khi xác định phạm vi sản phẩm.
+The programming language, SDK, MCP transport, rigging approach and motion generation method are not settled. The options discussed are suggestions to evaluate once the product scope is defined.

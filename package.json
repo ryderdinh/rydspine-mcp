@@ -35,6 +35,7 @@
     "real:art": "tsx acceptance/real-art.ts",
     "setup": "tsx src/setup.ts",
     "docs:tools": "tsx scripts/tools-doc.ts",
+    "showcase": "tsx scripts/showcase.ts",
     "installers": "tsx installer/build.ts"
   },
   "dependencies": {

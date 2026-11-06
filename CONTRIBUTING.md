@@ -36,6 +36,7 @@ The first `npm test` downloads Esoteric Software's coin sample from `spine-runti
 
 - **Tests.** Add a test for every new tool or fix. Prefer checking results with the runtime (pose a bone, compare vertices) over comparing JSON text.
 - **Tool reference.** `TOOLS.md` is generated from the server's tool definitions. After changing a tool's description or parameters, run `npm run docs:tools`; a test fails while it is stale.
+- **Showcase.** The animation at the top of `README.md` is rendered from the acceptance assets: `npm run acceptance && npm run showcase` (needs ffmpeg). Re-render it when a change alters how those assets look.
 - **Docs.** Keep the workflow in `README.md` and the `spine-rigging` skill (`.claude/skills/spine-rigging/SKILL.md`) in step with tool changes. The skill teaches agents how to rig; add new patterns there when you learn them.
 - **Spine Editor checks.** If you have the Spine Editor, run `npm run spine:check` for changes to the file format, meshes, constraints or timelines: it round-trips the acceptance assets through the real editor and compares every frame. Set `SPINE_CLI` to the Spine executable. `npm run skel:examples` checks `.skel` reading on Spine's official examples.
 - **Style.** TypeScript, ES modules, tabs. Match the surrounding code; comments explain why, not what. `npm run typecheck` must pass.

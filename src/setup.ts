@@ -64,7 +64,7 @@ function backup(file: string) {
 	if (!existsSync(file)) return;
 	const copy = `${file}.bak-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 	copyFileSync(file, copy);
-	note(`bản sao lưu: ${copy}`);
+	note(`backup: ${copy}`);
 }
 
 interface Target {
@@ -81,13 +81,13 @@ const targets: Target[] = [
 		id: "claude-code",
 		label: "Claude Code",
 		found: () => has("claude"),
-		missing: "không thấy lệnh `claude`; cài Claude Code rồi chạy lại",
+		missing: "no `claude` command found; install Claude Code and run this again",
 		install: () => {
 			run("claude", ["mcp", "remove", NAME, "-s", "user"], cliEnv);
 			const env = Object.entries(server.env).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
 			// -e takes several values, so the name goes before it.
 			const r = run("claude", ["mcp", "add", "-s", "user", NAME, ...env, "--", server.command, ...server.args], cliEnv);
-			if (!r?.ok) return void fail(`claude mcp add: ${r?.out ?? "không chạy được"}`), false;
+			if (!r?.ok) return void fail(`claude mcp add: ${r?.out ?? "could not run"}`), false;
 			const skill = join(APP, ".claude", "skills", "spine-rigging");
 			if (existsSync(skill)) {
 				cpSync(skill, join(claudeDir, "skills", "spine-rigging"), { recursive: true });
@@ -100,22 +100,22 @@ const targets: Target[] = [
 		id: "claude-desktop",
 		label: "Claude Desktop",
 		found: () => existsSync(dirname(desktopConfig)),
-		missing: "chưa thấy Claude Desktop (mở app ít nhất một lần rồi chạy lại)",
+		missing: "Claude Desktop not found (open the app at least once and run this again)",
 		install: () => {
 			let config: { mcpServers?: Record<string, unknown> } = {};
 			if (existsSync(desktopConfig)) {
 				try {
 					config = JSON.parse(readFileSync(desktopConfig, "utf8") || "{}");
 				} catch {
-					return void fail(`${desktopConfig} không phải JSON hợp lệ; sửa file rồi chạy lại`), false;
+					return void fail(`${desktopConfig} is not valid JSON; fix the file and run this again`), false;
 				}
 			}
 			backup(desktopConfig);
 			config.mcpServers = { ...config.mcpServers, [NAME]: server };
 			mkdirSync(dirname(desktopConfig), { recursive: true });
 			writeFileSync(desktopConfig, `${JSON.stringify(config, null, 2)}\n`);
-			note(`cấu hình: ${desktopConfig}`);
-			note("thoát hẳn Claude Desktop rồi mở lại để nạp MCP");
+			note(`config: ${desktopConfig}`);
+			note("quit Claude Desktop completely and reopen it to load the MCP");
 			return true;
 		},
 	},
@@ -123,13 +123,13 @@ const targets: Target[] = [
 		id: "codex",
 		label: "Codex",
 		found: () => has("codex"),
-		missing: "không thấy lệnh `codex`; cài Codex CLI rồi chạy lại",
+		missing: "no `codex` command found; install the Codex CLI and run this again",
 		install: () => {
 			mkdirSync(codexDir, { recursive: true });
 			run("codex", ["mcp", "remove", NAME], cliEnv);
 			const env = Object.entries(server.env).flatMap(([k, v]) => ["--env", `${k}=${v}`]);
 			const r = run("codex", ["mcp", "add", NAME, ...env, "--", server.command, ...server.args], cliEnv);
-			if (!r?.ok) return void fail(`codex mcp add: ${r?.out ?? "không chạy được"}`), false;
+			if (!r?.ok) return void fail(`codex mcp add: ${r?.out ?? "could not run"}`), false;
 			return true;
 		},
 	},
@@ -148,16 +148,16 @@ async function verify(): Promise<number> {
 }
 
 async function main() {
-	console.log(`\n${bold("rydspine — cài MCP rig & animate Spine")}`);
-	note(`mã nguồn: ${APP}`);
-	if (testHome) console.log(`  ${yellow("!")} chế độ thử: mọi cấu hình ghi vào ${HOME}`);
+	console.log(`\n${bold("rydspine — Spine rig & animation MCP setup")}`);
+	note(`source: ${APP}`);
+	if (testHome) console.log(`  ${yellow("!")} test mode: all configuration goes to ${HOME}`);
 
 	step(1, "Node.js");
 	const major = Number(process.versions.node.split(".")[0]);
-	if (major < 20) return void fail(`cần Node 20 trở lên, máy đang có ${process.versions.node}`), 1;
+	if (major < 20) return void fail(`needs Node 20 or later, this machine has ${process.versions.node}`), 1;
 	ok(`Node ${process.versions.node} (${process.execPath})`);
 
-	step(2, "Kết nối với các app");
+	step(2, "Connect to apps");
 	const wanted = option("clients")?.split(",");
 	const done: string[] = [];
 	for (const t of targets) {
@@ -166,21 +166,21 @@ async function main() {
 			note(`${t.label}: ${t.missing}`);
 			continue;
 		}
-		if (!(await ask(`Cài cho ${t.label}?`))) continue;
+		if (!(await ask(`Set up ${t.label}?`))) continue;
 		if (t.install()) {
 			ok(t.label);
 			done.push(t.label);
 		}
 	}
-	if (!done.length) console.log(`  ${yellow("!")} chưa kết nối app nào`);
+	if (!done.length) console.log(`  ${yellow("!")} no app connected`);
 	mkdirSync(workspaces, { recursive: true });
-	note(`dự án được lưu ở ${workspaces}`);
+	note(`projects are stored in ${workspaces}`);
 
-	step(3, "Ảnh preview PNG");
-	if (flag("no-chromium")) note("bỏ qua (--no-chromium)");
-	else if (await ask("Tải Chromium (~150 MB) để tool preview xuất ảnh PNG? Bỏ qua thì preview chỉ có SVG.")) {
+	step(3, "PNG previews");
+	if (flag("no-chromium")) note("skipped (--no-chromium)");
+	else if (await ask("Download Chromium (~150 MB) so the preview tool can render PNG images? Without it previews are SVG only.")) {
 		const r = spawnSync(process.execPath, [join(APP, "node_modules", "playwright", "cli.js"), "install", "chromium"], { stdio: "inherit" });
-		r.status === 0 ? ok("Chromium") : fail("không tải được Chromium; preview vẫn chạy với SVG");
+		r.status === 0 ? ok("Chromium") : fail("could not download Chromium; previews still work as SVG");
 	}
 
 	step(4, "Spine Editor");
@@ -189,19 +189,19 @@ async function main() {
 		"C:\\Program Files\\Spine\\Spine.exe",
 		"C:\\Program Files (x86)\\Spine\\Spine.exe",
 	].find(existsSync);
-	if (spine) ok(`tìm thấy ${spine}; mở kết quả bằng Spine → Import Data… và chọn file .json đã export`);
-	else note("không thấy Spine Editor; không bắt buộc, file export vẫn dùng được trong game và runtime Spine");
+	if (spine) ok(`found ${spine}; open results with Spine → Import Data… and pick the exported .json file`);
+	else note("Spine Editor not found; it is optional, exported files still work in games and the Spine runtimes");
 
-	step(5, "Chạy thử server");
+	step(5, "Test the server");
 	try {
-		ok(`server chạy được, ${await verify()} tool sẵn sàng`);
+		ok(`server runs, ${await verify()} tools ready`);
 	} catch (e) {
-		fail(`server không khởi động: ${(e as Error).message}`);
+		fail(`server did not start: ${(e as Error).message}`);
 		return 1;
 	}
 
-	console.log(`\n${bold(green("Xong!"))} ${done.length ? `Đã kết nối: ${done.join(", ")}.` : ""}`);
-	console.log(`  Thử nhờ AI: "Tạo dự án Spine từ file nhan-vat.psd, rig và làm animation đi bộ."`);
+	console.log(`\n${bold(green("Done!"))} ${done.length ? `Connected: ${done.join(", ")}.` : ""}`);
+	console.log(`  Try asking your AI: "Create a Spine project from character.psd, rig it and make a walk animation."`);
 	return 0;
 }
 

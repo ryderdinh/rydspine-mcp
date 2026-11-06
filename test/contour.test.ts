@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join } from "node:path";
+import { COIN } from "./coin.js";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { contourMesh } from "../src/contour.js";
 
-const image = (name: string) => PNG.sync.read(readFileSync(resolve("test/fixtures/coin/images", `${name}.png`)));
+const image = (name: string) => PNG.sync.read(readFileSync(join(COIN, "images", `${name}.png`)));
 
 function pointInTriangles(x: number, y: number, pts: [number, number][], tris: number[]): boolean {
 	for (let t = 0; t < tris.length; t += 3) {

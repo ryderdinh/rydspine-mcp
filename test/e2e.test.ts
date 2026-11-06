@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { COIN } from "./coin.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -211,7 +212,6 @@ describe("rydspine end to end", () => {
 });
 
 describe("existing Spine project (coin, exported by Spine 4.3.75-beta)", () => {
-	const COIN = resolve("test/fixtures/coin");
 
 	it("unpacks the atlas back into the original images", async () => {
 		const r = await ok("project_import", {

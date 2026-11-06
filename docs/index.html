@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cài rydspine</title>
-<meta name="description" content="Cài rydspine, MCP rig và animate Spine 4.3, cho Claude Code, Claude Desktop và Codex chỉ bằng một file.">
+<title>Install rydspine</title>
+<meta name="description" content="Install rydspine, the MCP that rigs and animates Spine 4.3, for Claude Code, Claude Desktop and Codex with a single file.">
 <style>
 :root {
 	--bg: #f6f5f2; --card: #ffffff; --text: #1d1c1a; --muted: #6b6862; --line: #e3e0da;
@@ -58,8 +58,8 @@ a { color: var(--accent); }
 </head>
 <body>
 <main>
-	<h1>Cài rydspine</h1>
-	<p class="lead">MCP giúp AI rig và làm animation cho nhân vật Spine 4.3 từ file PSD hay ảnh rời. Tải một file, bấm đúp, trả lời vài câu hỏi là xong.</p>
+	<h1>Install rydspine</h1>
+	<p class="lead">An MCP that lets your AI rig and animate Spine 4.3 characters from a PSD or separate images. Download one file, double-click it, answer a few questions and you are done.</p>
 
 	<div class="card">
 		<div class="tabs" role="tablist">
@@ -70,89 +70,89 @@ a { color: var(--accent); }
 		<section data-for="mac">
 			<a class="download" href="rydspine-setup-mac.zip" download>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 19h16"/></svg>
-				Tải bộ cài cho macOS
+				Download the macOS installer
 			</a>
-			<p class="hint">rydspine-setup-mac.zip · Safari tự giải nén thành <code>rydspine-setup.command</code></p>
+			<p class="hint">rydspine-setup-mac.zip · Safari unzips it into <code>rydspine-setup.command</code></p>
 			<ol class="steps">
-				<li>Mở thư mục <b>Downloads</b>, bấm đúp <code>rydspine-setup.command</code>.
-					<div class="warn">macOS sẽ báo <b>không thể xác minh nhà phát triển</b> vì file chưa được Apple ký. Bấm <b>Done</b>, vào <b>System Settings → Privacy &amp; Security</b>, kéo xuống và bấm <b>Open Anyway</b>, rồi bấm đúp file lần nữa. (macOS 14 trở về trước: bấm chuột phải vào file → <b>Open</b>.)</div>
+				<li>Open your <b>Downloads</b> folder and double-click <code>rydspine-setup.command</code>.
+					<div class="warn">macOS will say it <b>cannot verify the developer</b> because the file is not signed by Apple. Click <b>Done</b>, go to <b>System Settings → Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>, then double-click the file again. (macOS 14 and earlier: right-click the file → <b>Open</b>.)</div>
 				</li>
-				<li>Cửa sổ Terminal mở ra và tự tải, tự cài. Khi được hỏi, gõ <kbd>Enter</kbd> để đồng ý.</li>
-				<li>Thấy dòng <b>Xong!</b> là đóng cửa sổ. Mở lại app AI của bạn (Claude Desktop cần thoát hẳn bằng <kbd>⌘Q</kbd>).</li>
+				<li>A Terminal window opens and downloads and installs everything. When asked, press <kbd>Enter</kbd> to accept.</li>
+				<li>When you see <b>Done!</b>, close the window. Restart your AI app (quit Claude Desktop completely with <kbd>⌘Q</kbd>).</li>
 			</ol>
 		</section>
 
 		<section data-for="win" hidden>
 			<a class="download" href="rydspine-setup-windows.bat" download>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 19h16"/></svg>
-				Tải bộ cài cho Windows
+				Download the Windows installer
 			</a>
-			<p class="hint">rydspine-setup-windows.bat · cần Windows 10 trở lên</p>
+			<p class="hint">rydspine-setup-windows.bat · needs Windows 10 or later</p>
 			<ol class="steps">
-				<li>Bấm đúp <code>rydspine-setup-windows.bat</code> trong thư mục <b>Downloads</b>.
-					<div class="warn">Nếu Windows hiện <b>Windows protected your PC</b>, bấm <b>More info</b> → <b>Run anyway</b>. File chỉ là script văn bản; bạn có thể mở bằng Notepad để đọc trước.</div>
+				<li>Double-click <code>rydspine-setup-windows.bat</code> in your <b>Downloads</b> folder.
+					<div class="warn">If Windows shows <b>Windows protected your PC</b>, click <b>More info</b> → <b>Run anyway</b>. The file is a plain text script; you can open it in Notepad to read it first.</div>
 				</li>
-				<li>Cửa sổ dòng lệnh mở ra và tự tải, tự cài. Khi được hỏi, gõ <kbd>Enter</kbd> để đồng ý.</li>
-				<li>Thấy dòng <b>Xong!</b> là bấm phím bất kỳ để đóng. Mở lại app AI của bạn (Claude Desktop cần thoát hẳn từ khay hệ thống).</li>
+				<li>A command window opens and downloads and installs everything. When asked, press <kbd>Enter</kbd> to accept.</li>
+				<li>When you see <b>Done!</b>, press any key to close. Restart your AI app (quit Claude Desktop completely from the system tray).</li>
 			</ol>
 		</section>
 	</div>
 
-	<h2>Cần có trước</h2>
-	<p><b>Node.js 20 trở lên.</b> Chưa có thì cài bản LTS ở <a href="https://nodejs.org/" rel="noopener">nodejs.org</a>; bộ cài sẽ tự mở trang này nếu thiếu. Ngoài ra cần ít nhất một app AI dưới đây.</p>
+	<h2>Requirements</h2>
+	<p><b>Node.js 20 or later.</b> If you do not have it, install the LTS version from <a href="https://nodejs.org/" rel="noopener">nodejs.org</a>; the installer opens that page if Node is missing. You also need at least one of the AI apps below.</p>
 	<ul class="apps">
-		<li><b>Claude Code</b><span>Ghi vào cấu hình người dùng, kèm skill <code>spine-rigging</code></span></li>
-		<li><b>Claude Desktop</b><span>Thêm vào <code>claude_desktop_config.json</code>, có sao lưu</span></li>
-		<li><b>Codex</b><span>Thêm vào <code>~/.codex/config.toml</code></span></li>
+		<li><b>Claude Code</b><span>Added to the user configuration, with the <code>spine-rigging</code> skill</span></li>
+		<li><b>Claude Desktop</b><span>Added to <code>claude_desktop_config.json</code>, with a backup</span></li>
+		<li><b>Codex</b><span>Added to <code>~/.codex/config.toml</code></span></li>
 	</ul>
 
-	<h2>Bộ cài làm gì</h2>
-	<div class="terminal"><span class="b">rydspine — cài MCP rig &amp; animate Spine</span>
+	<h2>What the installer does</h2>
+	<div class="terminal"><span class="b">rydspine — Spine rig &amp; animation MCP setup</span>
 
 <span class="b">1. Node.js</span>
   <span class="g">✓</span> Node 22.11.0
-<span class="b">2. Kết nối với các app</span>
-  Cài cho Claude Code? [Y/n]
+<span class="b">2. Connect to apps</span>
+  Set up Claude Code? [Y/n]
   <span class="g">✓</span> Claude Code
-  Cài cho Claude Desktop? [Y/n]
-  <span class="d">bản sao lưu: …/claude_desktop_config.json.bak-…</span>
+  Set up Claude Desktop? [Y/n]
+  <span class="d">backup: …/claude_desktop_config.json.bak-…</span>
   <span class="g">✓</span> Claude Desktop
-<span class="b">3. Ảnh preview PNG</span>
-  Tải Chromium (~150 MB) để tool preview xuất ảnh PNG? [Y/n]
+<span class="b">3. PNG previews</span>
+  Download Chromium (~150 MB) so the preview tool can render PNG images? [Y/n]
 <span class="b">4. Spine Editor</span>
-  <span class="g">✓</span> tìm thấy Spine; mở kết quả bằng Spine → Import Data…
-<span class="b">5. Chạy thử server</span>
-  <span class="g">✓</span> server chạy được, 48 tool sẵn sàng
+  <span class="g">✓</span> found Spine; open results with Spine → Import Data…
+<span class="b">5. Test the server</span>
+  <span class="g">✓</span> server runs, 49 tools ready
 
-<span class="g b">Xong!</span></div>
-	<p class="hint">Mã nguồn được tải về <code>~/.rydspine/app</code>, dự án lưu ở <code>~/.rydspine/workspaces</code>. Chỉ app nào có trên máy mới được hỏi; cấu hình cũ luôn được giữ lại. Chạy lại bộ cài bất cứ lúc nào để cập nhật bản mới.</p>
+<span class="g b">Done!</span></div>
+	<p class="hint">The source is downloaded to <code>~/.rydspine/app</code> and projects are stored in <code>~/.rydspine/workspaces</code>. You are only asked about apps installed on your machine; existing configuration is always kept. Run the installer again at any time to update.</p>
 
-	<h2>Dùng thử</h2>
-	<p>Mở app AI và nhờ, ví dụ:</p>
-	<pre><code>Tạo dự án Spine từ file nhan-vat.psd, rig và làm animation đi bộ, rồi export.</code></pre>
-	<p>Kết quả là <code>.json</code>, <code>.atlas</code> và <code>.png</code> chuẩn Spine 4.3: nạp thẳng vào game, hoặc mở trong Spine Editor bằng <b>Spine → Import Data…</b> (không bắt buộc có Spine Editor).</p>
+	<h2>Try it</h2>
+	<p>Open your AI app and ask, for example:</p>
+	<pre><code>Create a Spine project from character.psd, rig it, make a walk animation, then export it.</code></pre>
+	<p>The result is standard Spine 4.3 <code>.json</code>, <code>.atlas</code> and <code>.png</code> files: load them straight into your game, or open them in the Spine Editor with <b>Spine → Import Data…</b> (the Spine Editor is optional).</p>
 
-	<h2>Gặp sự cố</h2>
-	<details><summary>Bấm đúp mà không có gì xảy ra (macOS)</summary>
-		<p>Mở Terminal, gõ <code>bash </code> (có dấu cách), kéo file <code>rydspine-setup.command</code> vào cửa sổ rồi nhấn <kbd>Enter</kbd>.</p>
+	<h2>Troubleshooting</h2>
+	<details><summary>Nothing happens when I double-click (macOS)</summary>
+		<p>Open Terminal, type <code>bash </code> (with a space), drag <code>rydspine-setup.command</code> into the window and press <kbd>Enter</kbd>.</p>
 	</details>
-	<details><summary>Báo thiếu Node.js dù đã cài</summary>
-		<p>Đóng hết cửa sổ Terminal hoặc dòng lệnh rồi bấm đúp bộ cài lần nữa. Nếu dùng nvm, đặt bản mặc định bằng <code>nvm alias default 22</code>.</p>
+	<details><summary>It says Node.js is missing, but it is installed</summary>
+		<p>Close every Terminal or command window and double-click the installer again. If you use nvm, set a default version with <code>nvm alias default 22</code>.</p>
 	</details>
-	<details><summary>App AI không thấy rydspine</summary>
+	<details><summary>My AI app does not see rydspine</summary>
 		<ul>
-			<li>Claude Desktop: thoát hẳn app rồi mở lại.</li>
-			<li>Claude Code: chạy <code>claude mcp list</code>, phải có dòng <code>rydspine</code>.</li>
-			<li>Codex: chạy <code>codex mcp list</code>.</li>
+			<li>Claude Desktop: quit the app completely and reopen it.</li>
+			<li>Claude Code: run <code>claude mcp list</code>; it should list <code>rydspine</code>.</li>
+			<li>Codex: run <code>codex mcp list</code>.</li>
 		</ul>
 	</details>
-	<details><summary>Cài thủ công (cho người quen dòng lệnh)</summary>
+	<details><summary>Manual install (for command line users)</summary>
 <pre><code>git clone https://github.com/ryderdinh/rydspine-mcp ~/.rydspine/app
 cd ~/.rydspine/app &amp;&amp; npm install --omit=dev
 node node_modules/tsx/dist/cli.mjs src/setup.ts</code></pre>
 	</details>
 
-	<footer>rydspine · MCP cho Spine 4.3 · <a href="https://github.com/ryderdinh/rydspine-mcp" rel="noopener">mã nguồn</a></footer>
+	<footer>rydspine · MCP for Spine 4.3 · MIT license · <a href="https://github.com/ryderdinh/rydspine-mcp" rel="noopener">source</a></footer>
 </main>
 <script>
 const tabs = document.querySelectorAll(".tab");

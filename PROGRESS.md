@@ -57,7 +57,7 @@ Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirement
   - the original animations play correctly and loop seamlessly;
   - a `pop` animation added with the MCP tools;
   - export then re-import keeps the original animations unchanged.
-- Coin fixture in `test/fixtures/coin/` with `license.txt`. Esoteric Software's images are for non-commercial use only.
+- Coin fixture in `test/fixtures/coin/` with `license.txt`. Esoteric Software's images are for non-commercial use only. (Since 2026-11-06 it is downloaded by the tests instead, see that day's entry.)
 
 ### 2026-10-30 (cont. 2)
 - `psd_import`:
@@ -244,7 +244,7 @@ Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirement
 
 ### 2026-10-31 (cont. 14)
 
-- Tried on the user's ticket art (`~/Downloads/spine/Tickets`, not committed). The first self-devised version (ticket flies in, floats, flips with `scaleX`) fell short. Reading the sample file `Ticket.spine` (JSON exported with the Spine CLI, frames rendered with Spine) revealed the real technique: the front ticket is a hull-only mesh (50 vertices) bound to 6 bones laid along its length, each vertex weighted to 4–6 bones with widely spread weights; each bone in turn (2 frames apart) moves to the far end and flips `scaleX` to -1, so the ticket curls over like a page and back. The back ticket is a mesh on a wavy bone chain, darkening while the front ticket flips; the shadow fades; the front ticket scales up to 1.78; a yellow additive glow and an additive copy flashing red.
+- Tried on the user's ticket art (a local folder, not committed). The first self-devised version (ticket flies in, floats, flips with `scaleX`) fell short. Reading the sample file `Ticket.spine` (JSON exported with the Spine CLI, frames rendered with Spine) revealed the real technique: the front ticket is a hull-only mesh (50 vertices) bound to 6 bones laid along its length, each vertex weighted to 4–6 bones with widely spread weights; each bone in turn (2 frames apart) moves to the far end and flips `scaleX` to -1, so the ticket curls over like a page and back. The back ticket is a mesh on a wavy bone chain, darkening while the front ticket flips; the shadow fades; the front ticket scales up to 1.78; a yellow additive glow and an additive copy flashing red.
 - Rebuilt with the rydspine tools (project `ticket-flip`): Spine renders it nearly frame-identical to the sample. Remaining difference: the sample's glow is a mesh stretched with deform; rydspine had no deform key tool yet, so it used bone rotation/scale.
 - Three tool gaps exposed and fixed:
   - `mesh_generate` can rebuild an existing mesh (recovering the image placement with an affine fit from UVs to setup coordinates); refused if the mesh has deform keys. Previously one had to revert and lose all animations.
@@ -259,7 +259,20 @@ Update this file after each piece of work. Detailed plan: `PLAN.md`. Requirement
 - Applied to `ticket-flip`: the glow became a mesh, with 5 deform keys converted from the sample's keys (each sample vertex became a `radius` 300 handle). Spine imports and renders it: the yellow glow sweeps into a long band across the ticket like the sample.
 - New test `test/deform.test.ts` (stretching plain and weighted meshes on rotated/scaled bones, matching every vertex; ease; radius; meshes with deform cannot be rebuilt; two-axis `scale`). 59/59 tests passing.
 
+### 2026-11-06
+
+- Prepared the repo for open source:
+  - every document translated to English, plus the install page `docs/index.html`, the installer scripts and the setup wizard `src/setup.ts`; the installers were rebuilt (`npm run installers`);
+  - `LICENSE` (MIT) and package metadata (license, repository, keywords); a README section on contributing and licensing: rydspine is MIT, but the Spine Runtimes it depends on require each user to hold a Spine Editor license;
+  - the `.html` player written by `export` now carries the Spine Runtimes license notice of the bundled `spine-player`, as that license requires on redistribution;
+  - the coin sample (Esoteric's art, non-commercial) left the repo: `test/coin.ts` downloads it once, pinned to spine-runtimes commit `7f1ba951`, into `~/.cache/rydspine/coin` (vitest `globalSetup`); the files match the old fixture byte for byte. It remains in older git history;
+  - GitHub Actions workflow `.github/workflows/test.yml`: typecheck and tests on Ubuntu with Chromium;
+  - git history checked: no activation codes, `.env`, keys or PSDs.
+- Tests: 59/59 passing.
+
 ## Next steps
+
+0. Make the repo public on GitHub, then enable GitHub Pages on the `docs/` folder and check the installers download from `codeload.github.com` and the CI workflow passes.
 
 1. Acceptance on the user's own art when available (already passed on Spine's dragon art: `npm run real:art`).
 2. Flat picture splitting: first version done, edge halos removed. Possible follow-ups: AI-suggested polygons, better painting-in (inpainting with an image model).

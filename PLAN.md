@@ -140,7 +140,7 @@ Besides the automatic checks, each sample needs a person to review the preview b
 - **User assets** (PSD, PNG, projects): kept in a local workspace folder, never committed. The acceptance suite only uses sample assets allowed to be public in the repo.
 - **Local execution:** the MCP server runs over stdio on the user's machine and opens no network ports. The server sends no data out; the only images the LLM sees are those the client requests through tools.
 - **Logs and reports:** never record sensitive absolute paths or secret contents; strip environment details from error reports.
-- **Repo:** keep it private. Before every push, check there are no secrets (enable GitHub secret scanning).
+- **Repo:** public, MIT licensed. Before every push, check there are no secrets (enable GitHub secret scanning). Third-party art (the coin sample, Spine's example art) is downloaded at run time, never committed.
 
 ## 12. Needs user confirmation before phase 1
 

@@ -2,7 +2,26 @@
   "name": "rydspine-mcp",
   "version": "0.0.0",
   "private": true,
-  "description": "Spine 4.3 rigging and animation MCP",
+  "description": "MCP server that rigs and animates Spine 4.3 skeletons from natural-language requests",
+  "license": "MIT",
+  "author": "Ryder Dinh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryderdinh/rydspine-mcp.git"
+  },
+  "homepage": "https://github.com/ryderdinh/rydspine-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/ryderdinh/rydspine-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "spine",
+    "spine2d",
+    "esoteric",
+    "animation",
+    "rigging",
+    "model-context-protocol"
+  ],
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",

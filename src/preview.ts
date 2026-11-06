@@ -250,6 +250,8 @@ function playerHtml(ws: Workspace, json: string, atlas: string, page: Buffer): s
 	const playerDir = join(require.resolve("@esotericsoftware/spine-player/package.json"), "..", "dist");
 	const js = readFileSync(join(playerDir, "iife", "spine-player.min.js"), "utf8");
 	const css = readFileSync(join(playerDir, "spine-player.min.css"), "utf8");
+	// The bundled player is redistributed, so its license and copyright notice travel with it.
+	const license = readFileSync(join(playerDir, "..", "LICENSE"), "utf8").trim().replace(/--/g, "- -");
 	const anims = Object.keys(ws.doc.animations);
 	const config = {
 		skeleton: `${name}.json`,
@@ -275,6 +277,9 @@ html,body{margin:0;height:100%;background:#2b2b2b}#player{width:100%;height:100%
 </head>
 <body>
 <div id="player"></div>
+<!-- Spine player (@esotericsoftware/spine-player)
+${license}
+-->
 <script>${js.replace(/<\/script/gi, "<\\/script")}</script>
 <script>
 window.playerReady = false;

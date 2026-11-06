@@ -1,12 +1,12 @@
 // Round trip with Spine Editor: export, edit the JSON as Spine would, sync back, diff and revert.
 import { readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { COIN } from "./coin.js";
 import { beforeAll, expect, it } from "vitest";
 import { Workspace } from "../src/workspace.js";
 import { connect } from "./helpers.js";
 
 let h: Awaited<ReturnType<typeof connect>>;
-const COIN = resolve("test/fixtures/coin");
 
 beforeAll(async () => {
 	h = await connect();

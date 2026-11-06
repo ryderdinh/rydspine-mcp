@@ -1,6 +1,7 @@
 // The binary coin export must convert to JSON that plays exactly like the JSON export of the same project.
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { COIN } from "./coin.js";
 import {
 	AtlasAttachmentLoader,
 	MixFrom,
@@ -16,7 +17,6 @@ import { compareAnimation, compareStructure, PlaceholderLoader } from "../accept
 import { skelToJson } from "../src/skel.js";
 import { connect } from "./helpers.js";
 
-const COIN = resolve("test/fixtures/coin");
 const atlas = () => new TextureAtlas(readFileSync(join(COIN, "coin.atlas"), "utf8"));
 const read = (json: unknown) => new SkeletonJson(new AtlasAttachmentLoader(atlas())).readSkeletonData(json as object);
 

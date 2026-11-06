@@ -64,3 +64,22 @@ Every operation is saved as a version: `history_list` to view, `history_diff` to
 **Coordinate conventions:** y points up, units are pixels, angles are degrees counter-clockwise. Animation values are offsets from the setup pose; only `scalex`/`scaley` are multipliers.
 
 Reference projects (official runtimes, community Spine MCPs): `REFERENCES.md`.
+
+## Contributing
+
+Issues and pull requests are welcome. Before sending a change:
+
+```bash
+npm run typecheck
+npm test            # downloads the coin sample from spine-runtimes once (needs network access)
+```
+
+Add a test for new tools or fixes, and keep `README.md` and the `spine-rigging` skill in step with tool changes. If you have the Spine Editor, `npm run spine:check` round-trips the acceptance assets through it. Never commit Spine license keys or activation codes; `SPINE_ACTIVATION_CODE` is read only from the environment.
+
+## License
+
+rydspine's own code is released under the [MIT License](LICENSE).
+
+It depends on the [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) (`@esotericsoftware/spine-core`, `@esotericsoftware/spine-player`), which are under the [Spine Runtimes License Agreement](https://esotericsoftware.com/spine-runtimes-license): each user of software that integrates them needs their own [Spine Editor license](https://esotericsoftware.com/spine-purchase). The `.html` player that `export` writes bundles `spine-player` together with that license notice. rydspine is an independent project, not affiliated with or endorsed by Esoteric Software; Spine is a trademark of Esoteric Software LLC.
+
+The tests download Esoteric Software's coin sample, whose images may not be used commercially (see its `license.txt`); `npm run real:art` uses art that is for demonstration only. Neither is stored in this repo.

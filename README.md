@@ -1,79 +1,160 @@
-# rydspine-mcp
+<h1 align="center">rydspine</h1>
 
-An MCP server that builds Spine 4.3 rigs and animations from natural-language requests. The Spine Editor does not have to be installed: the server writes Spine data directly and checks it with the official Spine 4.3 runtime. Each user still needs their own Spine license, see [License](#license).
+<p align="center">
+  <b>Rig and animate Spine 4.3 skeletons by asking your AI.</b><br>
+  An MCP server that turns PSDs, PNG parts or a flat picture into bones, meshes, constraints and animations,<br>
+  and checks every edit with the official Spine runtime.
+</p>
 
-- Tool reference: [`TOOLS.md`](TOOLS.md)
-- Changes: [`CHANGELOG.md`](CHANGELOG.md)
-- Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md) · Security: [`SECURITY.md`](SECURITY.md)
-- Development notes (plan, requirements, working log): [`dev-notes/`](dev-notes/)
+<p align="center">
+  <a href="https://github.com/ryderdinh/rydspine-mcp/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/ryderdinh/rydspine-mcp/actions/workflows/test.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Spine 4.3" src="https://img.shields.io/badge/Spine-4.3-ff4000.svg">
+  <img alt="Node 20+" src="https://img.shields.io/badge/node-%E2%89%A520-339933.svg">
+  <a href="https://modelcontextprotocol.io"><img alt="MCP" src="https://img.shields.io/badge/MCP-server-6e56cf.svg"></a>
+</p>
 
-## Installation
+<p align="center">
+  <a href="https://ryderdinh.github.io/rydspine-mcp/"><b>Install</b></a> ·
+  <a href="TOOLS.md">Tool reference</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
-**Users:** open the [`docs/index.html`](docs/index.html) page (GitHub Pages), download the installer for macOS or Windows and double-click it. The installer downloads the source into `~/.rydspine/app` and runs the setup program `src/setup.ts`, which writes the MCP configuration for Claude Code, Claude Desktop and Codex. Run it again to update. Repackage the installers after editing `installer/`: `npm run installers`.
+<p align="center">
+  <img src=".github/readme/showcase.gif" width="680" alt="Four skeletons animated by rydspine: a character running then swinging a sword, a dragon flapping its wings, a chest opening with a glow, a crab waving a claw">
+  <br><sub>Rigged and animated entirely through rydspine's tools: run, stop and swing with IK legs; wing flap with neck and tail out of phase; lid bounce with a fading glow; a crab built from a PSD with pivot markers, its right half mirrored from the left.</sub>
+</p>
 
-**Development:** requires Node 20+.
+## Why rydspine
+
+Rigging a 2D character in Spine takes hours of placing bones, weighting meshes and keying curves. rydspine gives an AI assistant (Claude Code, Claude Desktop, Codex or any MCP client) a set of precise, typed tools for that work, so you can say *"rig this dragon and make it fly"* and get a real Spine project back.
+
+- **The AI reasons, the server executes.** The model reads your art and picks bones and motions; rydspine performs each step as a validated, undoable operation. It never calls a model itself.
+- **Checked by the real runtime.** Every edit is loaded and played in the official `spine-core` 4.3 runtime before it is saved, and rejected if it breaks the skeleton.
+- **Real Spine output.** Skeleton JSON, atlas and PNG for any Spine 4.3 runtime, plus a self-contained HTML player. Open it in the Spine Editor with *Import Data* and keep working by hand.
+- **Not just characters.** Templates and tools for limbs, wings, tails, hinges, wheels, plants, logos and props.
+
+## Features
+
+| | |
+|---|---|
+| **Input** | Layered PSDs (with `[pivot]` marker layers for joints), separate PNG parts, flat pictures split by polygon, existing Spine 4.3 exports (JSON or binary `.skel`), image sequences |
+| **Rigging** | Bones in world coordinates, rig templates (chain, hinge, wheel, IK limb, biped, quadruped), outline-following meshes with automatic weights, IK, transform, path, physics and slider constraints, skins, left/right mirroring, points, hit boxes and clipping masks |
+| **Animation** | Motion primitives (oscillate with follow-through, tween with anticipation, bounce, walk and run cycles), hand keys, slot, constraint, event, draw order, sequence and mesh deform keys, CSS-style bezier easing |
+| **Checks** | Runtime validation, loop seam checks, folded or stretched mesh detection, foot sliding, frame previews |
+| **Editing** | Every change is a version: diff, revert, lock approved parts, re-import edits made in the Spine Editor |
+| **Output** | Spine 4.3 JSON, atlas, PNG, an `images/` folder for the Spine Editor, an HTML player, and the rydspine studio web view |
+
+49 tools in all; see the [tool reference](TOOLS.md).
+
+## Quick start
+
+### Installer (macOS, Windows)
+
+Download the installer from the [install page](https://ryderdinh.github.io/rydspine-mcp/) and double-click it. It needs [Node.js 20+](https://nodejs.org), downloads rydspine into `~/.rydspine/app` and connects it to the apps it finds: Claude Code (with the rigging skill), Claude Desktop and Codex. Run it again to update.
+
+### From source
 
 ```bash
+git clone https://github.com/ryderdinh/rydspine-mcp
+cd rydspine-mcp
 npm install
-npx playwright install chromium   # for PNG previews and the player page tests
-npm test
+npx playwright install chromium   # optional: PNG previews
+npm run setup                     # connect Claude Code, Claude Desktop and Codex
 ```
 
-## Using with Claude Code
+Opening this folder in Claude Code picks up the bundled `.mcp.json` automatically. Any other MCP client can run the server over stdio (desktop apps may not see your shell's `PATH`; `npm run setup` writes absolute paths for that reason):
 
-The repo ships a `.mcp.json`, so Claude Code opened in this folder picks up the `rydspine` server automatically. For other MCP clients, run the server over stdio:
-
-```bash
-npx tsx src/index.ts
+```json
+{
+  "mcpServers": {
+    "rydspine": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/rydspine-mcp/src/index.ts"],
+      "env": { "RYDSPINE_WORKSPACES": "/path/to/workspaces" }
+    }
+  }
+}
 ```
 
-Projects are stored in `workspaces/` (change it with the `RYDSPINE_WORKSPACES` variable); this folder is not committed to git.
+### First request
 
-## Workflow
+```text
+Create a Spine project from character.psd. Rig it as a biped with IK legs,
+make a looping walk and a one-shot wave, check for foot sliding, then export.
+```
 
-1. `project_create`: create a project; or `project_import` to open an existing Spine 4.3 project (JSON or `.skel`).
-2. `psd_import` or `image_import`: bring in the parts, each at its own position. In a PSD, a layer `<name>[pivot]` (a small dot, may be hidden) places the bone for the layer or group `<name>` next to it; a `[pivot]` inside a group is that group's bone. Bones nest like the groups, and each part is bound to the nearest bone.
-   Flat picture (one image, not split into layers): `image_inspect` returns the image with a coordinate grid; `image_split` splits the separate islands on a transparent or single-color background automatically, or cuts one polygon per part (listed back to front). `overlap` paints in the area hidden by the part in front, only inside that part's polygon, so outline the hidden piece too (neck under the head, thighs under the shirt) so joints show no gap when they turn. `dryRun` only returns the overlay for adjusting polygons. On a white or single-color background the anti-aliased rim is unmixed from the background color (`matte`), so parts show no light halo over other backdrops.
-3. `rig_template` (chain/wing, hinge, wheel, IK limb, biped, quadruped) or `bone_add` (`space: "world"`): place bones at the joints in the art.
-4. `slot_update`: bind parts to bones; the art stays in place.
-5. `mesh_generate` (follows the image outline by default; call again to rebuild the mesh; `smooth` lets paper and cloth bend smoothly without tearing), `constraint_add`: add bending, IK, transform, physics, path (give points on the art and rydspine builds the curve; `pathBones` weights the curve to a few control bones) and slider (plays an animation by a control bone). `shape_add`: game anchor points (`point`: gun muzzle, hand grip), hit areas (`boundingbox`) or masks (`clipping`), from points on the art or traced around a slot's outline (`around`).
-6. `mirror_bones`: copy one side of the rig to the other (bones, slots, flipped images, IK, physics). `mirror_animation`: move an animation to the other side (`swap` for side views, `mirror` reflects for front views).
-7. `skin_create` / `skin_variant` when several outfits are needed.
-8. `anim_create`, then `anim_oscillate` / `anim_tween` / `anim_bounce` / `anim_gait` / `anim_set_keys` / `anim_slot_keys`. Constraints that change over time (position on a path, physics wind, mix, slider time): `anim_constraint_keys`. Multi-frame effects (fire, sparkles): `sequence_import` then `anim_sequence_keys`. Game events (footsteps, hits, sounds): `event_define` and `anim_event_keys`. Front/back layer swaps during an animation: `anim_draw_order_keys`. Mesh shapes over time (a stretching glow, a billowing flag, a squashing blob): `anim_deform_keys`. `property: "scale"` keys both scale axes at once. Every `ease` takes a preset or a CSS-style bezier `[x1, y1, x2, y2]`.
-9. `validate`, `motion_check` → `preview` → `export`.
+The assistant imports the layers, places the joints, binds and meshes the parts, adds constraints, keys the animations, looks at the previews and exports `character.json`, `character.atlas`, `character.png` and `character.html`.
 
-## Interface
+## How it works
 
-Run `npm run ui` (or call the `ui_open` tool) and open http://127.0.0.1:5180. The **rydspine studio** page plays every project's animations with the Spine player, and shows check results, the bone tree, version history and a frame strip.
+A typical session goes through these tools; the [tool reference](TOOLS.md) has every parameter.
 
-## Acceptance suite
+| Step | Tools |
+|---|---|
+| 1. Start | `project_create`, or `project_import` for an existing Spine 4.3 export |
+| 2. Bring in art | `psd_import`, `image_import`, `sequence_import`; for one flat picture `image_inspect` then `image_split` |
+| 3. Bones | `rig_template` for common structures, or `bone_add` / `bone_update` at joints read off the art |
+| 4. Bind and bend | `slot_update` (art stays in place), `mesh_generate`, `constraint_add`, `shape_add`, `mirror_bones`, skins |
+| 5. Animate | `anim_create`, then `anim_gait`, `anim_oscillate`, `anim_tween`, `anim_bounce`, `anim_set_keys` and the slot, constraint, event, draw order, sequence and deform key tools |
+| 6. Check | `validate`, `motion_check`, `preview` |
+| 7. Deliver | `export`; `project_sync` brings back edits made in the Spine Editor |
 
-Run `npm run acceptance` to build 8 sample assets (character, dragon, tree, chest, car, logo, lantern, crab) through the MCP tools. Results land in `acceptance/out/`: exported files for each asset, `report.json` and the `studio-local.html` page.
+Every edit runs on a copy of the project, is checked by the runtime and only then saved as a new version, so a rejected edit changes nothing. `history_list`, `history_diff` and `history_revert` move through versions; `lock_set` protects parts you have approved.
 
-Run `npm run real:art` for acceptance on real art: the dragon from Spine's example set (art by Thiago Brayner, for demonstration only). The script builds a PSD like one an artist would deliver (flat layers, `[pivot]` markers), rigs it and makes a flying animation entirely through the MCP tools, then compares the setup pose with the original pixel by pixel. With `SPINE_CLI` set it also round-trips through the Spine Editor. The art stays in `~/.cache` and `acceptance/out/` and is never committed or published.
+**Conventions.** World space is y-up, units are pixels, rotations are degrees counter-clockwise. Animation values are offsets from the setup pose; `scalex` and `scaley` are multipliers.
 
-Run `npm run spine:check` to check the 8 assets with the real Spine Editor: Spine imports each JSON file and exports it again, then the runtime compares both versions frame by frame; Spine also renders a frame strip for each animation. Set `SPINE_CLI` to point at Spine (for example `/Applications/Spine.app/Contents/MacOS/Spine`), or on Linux set `SPINE_ACTIVATION_CODE` so the script downloads Spine itself. Without either, the check is skipped.
+**Rigging skill.** [`.claude/skills/spine-rigging`](.claude/skills/spine-rigging/SKILL.md) teaches agents to rig the way Esoteric's own example projects do: which constraint to use where, typical physics settings, and the rules the Spine Editor is strict about. Claude Code loads it in this repo, and the installer copies it to `~/.claude/skills/`.
 
-Run `npm run skel:examples` to check `.skel` reading on Spine's official examples (sparse download from `github.com/EsotericSoftware/spine-runtimes`, branch 4.3): each file is converted to JSON and compared, frame by frame, with the runtime reading the `.skel` directly. `npx tsx acceptance/skel-fixture.ts` regenerates `test/fixtures/features` with the real Spine.
+**Studio.** `npm run ui` (or the `ui_open` tool) serves the rydspine studio on http://127.0.0.1:5180: every project's animations in the Spine player, with check results, the bone tree, version history and frame strips.
 
-The `.claude/skills/spine-rigging` skill teaches agents to rig the way Spine's example projects do (choosing constraints, typical physics settings). Claude Code loads it automatically when this repo is open; to use it elsewhere, copy the folder into `~/.claude/skills/`.
+## Verification
 
-Every operation is saved as a version: `history_list` to view, `history_diff` to compare, `history_revert` to go back, `lock_set` to lock approved parts. After editing in the Spine Editor and exporting JSON again, use `project_sync` to bring the edit back as a new version.
+rydspine is tested against Spine itself, not only against its own expectations.
 
-**`export` output:** `<name>.json`, `<name>.atlas`, `<name>.png` for the Spine 4.3 runtimes, and `<name>.html` to view the animations in a browser. Anyone with Spine opens the JSON file with **File → Import Data** to get a `.spine` project.
+| Command | What it checks |
+|---|---|
+| `npm test` | Unit and end-to-end tests that drive the server through a real MCP client |
+| `npm run acceptance` | Builds eight assets (character, dragon, tree, chest, car, logo, lantern, crab) entirely through the tools, then validates, previews and exports them |
+| `npm run spine:check` | Round-trips those assets through the real Spine Editor and compares every bone, slot and vertex frame by frame (needs the Spine Editor) |
+| `npm run skel:examples` | Converts every binary `.skel` in Esoteric's official examples and plays it against the runtime's own reading |
+| `npm run real:art` | Rigs the dragon from Spine's examples from a PSD built like an artist's delivery and compares it with the original pixel by pixel |
 
-**Coordinate conventions:** y points up, units are pixels, angles are degrees counter-clockwise. Animation values are offsets from the setup pose; only `scalex`/`scaley` are multipliers.
+## Configuration
 
-Every tool, with all its parameters: [`TOOLS.md`](TOOLS.md). Reference projects (official runtimes, community Spine MCPs): `REFERENCES.md`.
+| Variable | Default | Purpose |
+|---|---|---|
+| `RYDSPINE_WORKSPACES` | `./workspaces` (`~/.rydspine/workspaces` when installed) | Where projects and their version history are stored |
+| `RYDSPINE_SPINE_VERSION` | `4.3.26` | Spine version written into new skeletons, to match your editor |
+| `SPINE_CLI` | — | Path to the Spine Editor executable, for `npm run spine:check` and `npm run real:art` |
+| `SPINE_ACTIVATION_CODE` | — | Linux only: lets `spine:check` download and activate the Spine Editor. Read from the environment, never stored or printed |
+
+## Status
+
+rydspine is young (0.1, unreleased) and its tools may still change. Known gaps:
+
+- The Windows installer has not been tried on a Windows machine yet.
+- Splitting a flat picture fills hidden areas by spreading edge colors; it does not redraw detail.
+- Spine's own `.spine` project format is not written directly; use the Spine Editor's *Import Data* on the exported JSON.
+
+Plans and the development log are in [`dev-notes/`](dev-notes/).
 
 ## Contributing
 
-Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the code layout and the checks to run. Report security problems privately, as described in [SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the code layout and the checks to run; report security problems privately as described in [SECURITY.md](SECURITY.md).
+
+## Acknowledgements
+
+- [Esoteric Software](https://esotericsoftware.com) for Spine and the [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes), whose example projects shaped the rigging recipes.
+- The community Spine MCP projects listed in [REFERENCES.md](REFERENCES.md), for ideas.
+- [ag-psd](https://github.com/Agamnentzar/ag-psd), [Delaunator](https://github.com/mapbox/delaunator) and [constrainautor](https://github.com/kninnug/Constrainautor) for PSD reading and triangulation.
 
 ## License
 
 rydspine's own code is released under the [MIT License](LICENSE).
 
-It depends on the [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) (`@esotericsoftware/spine-core`, `@esotericsoftware/spine-player`), which are under the [Spine Runtimes License Agreement](https://esotericsoftware.com/spine-runtimes-license): each user of software that integrates them needs their own [Spine Editor license](https://esotericsoftware.com/spine-purchase). The `.html` player that `export` writes bundles `spine-player` together with that license notice. rydspine is an independent project, not affiliated with or endorsed by Esoteric Software; Spine is a trademark of Esoteric Software LLC.
+It depends on the [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) (`@esotericsoftware/spine-core`, `@esotericsoftware/spine-player`), which are under the [Spine Runtimes License Agreement](https://esotericsoftware.com/spine-runtimes-license): each user of software that integrates them needs their own [Spine Editor license](https://esotericsoftware.com/spine-purchase). The HTML player that `export` writes bundles `spine-player` together with that license notice. rydspine is an independent project, not affiliated with or endorsed by Esoteric Software; Spine is a trademark of Esoteric Software LLC.
 
-The tests download Esoteric Software's coin sample, whose images may not be used commercially (see its `license.txt`); `npm run real:art` uses art that is for demonstration only. Neither is stored in this repo.
+The tests download Esoteric Software's coin sample, whose images may not be used commercially (see its `license.txt`); `npm run real:art` uses art that is for demonstration only. Neither is stored in this repo. The showcase above is drawn in code by `acceptance/build.ts` and rendered with `npm run showcase`.
